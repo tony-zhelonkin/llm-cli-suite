@@ -3,7 +3,20 @@
 # Managed by llm-sync
 
 echo "Installing Pi Coding Agent..."
-npm install -g @mariozechner/pi-coding-agent
+
+# Attempt to load NVM if it is installed in the devcontainer
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+if ! command -v npm &> /dev/null; then
+    echo "❌ Error: 'npm' is not installed or not in PATH."
+    echo "💡 Fix: To use Pi Coding Agent, you must install Node.js in this container."
+    echo "   Add the following to your devcontainer.json:"
+    echo '   "features": { "ghcr.io/devcontainers/features/node:1": {} }'
+    echo "   Skipping Pi Agent installation."
+else
+    npm install -g @mariozechner/pi-coding-agent
+fi
 
 echo "Configuring Pi Agent models..."
 mkdir -p ~/.pi/agent/
