@@ -2,6 +2,10 @@
 # Master Setup Script for Pi Agent
 # Managed by llm-sync
 
+echo "Installing Pi Coding Agent..."
+npm install -g @mariozechner/pi-coding-agent
+
+echo "Configuring Pi Agent models..."
 mkdir -p ~/.pi/agent/
 
 cat << 'JSON' > ~/.pi/agent/models.json
@@ -25,6 +29,4 @@ cat << 'JSON' > ~/.pi/agent/models.json
 }
 JSON
 
-if ! grep -q "free-gpu" ~/.bash_aliases; then
-    echo "alias free-gpu='curl -s http://172.17.0.1:11434/api/generate -d \"{\\\"model\\\": \\\"qwen3-coder:30b\\\", \\\"keep_alive\\\": 0}\" > /dev/null && curl -s http://172.17.0.1:11434/api/generate -d \"{\\\"model\\\": \\\"qwen3-coder:480b\\\", \\\"keep_alive\\\": 0}\" > /dev/null && curl -s http://172.17.0.1:11434/api/generate -d \"{\\\"model\\\": \\\"gemma4:26b\\\", \\\"keep_alive\\\": 0}\" > /dev/null'" >> ~/.bash_aliases
-fi
+echo "Pi Agent Configured with Optimized VRAM/RAM Context Limits."
