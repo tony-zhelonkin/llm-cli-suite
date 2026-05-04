@@ -4,32 +4,50 @@
 
 echo "Installing Pi Coding Agent..."
 
-# Attempt to load NVM if it is installed in the devcontainer
+# 1. Attempt to load existing NVM
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
+# 2. If npm is STILL not found, install NVM and Node.js automatically
 if ! command -v npm &> /dev/null; then
-    echo "❌ Error: 'npm' is not installed or not in PATH."
-    echo "💡 Fix: To use Pi Coding Agent, you must install Node.js in this container."
-    echo "   Add the following to your devcontainer.json:"
-    echo '   "features": { "ghcr.io/devcontainers/features/node:1": {} }'
-    echo "   Skipping Pi Agent installation."
-else
-    # Configure npm to use a user-owned directory for global installs to avoid EACCES errors
-    mkdir -p ~/.npm-global
-    npm config set prefix '~/.npm-global'
+    echo "📦 npm not found. Installing NVM and Node.js LTS automatically..."
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
     
-    # Ensure the new path is temporarily available for the rest of this script
-    export PATH=~/.npm-global/bin:$PATH
+    # Load the newly installed NVM into the current script session
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
     
-    npm install -g @mariozechner/pi-coding-agent
-    
-    # Add the path to bashrc so the user can use 'pi' after the container starts
-    if ! grep -q "npm-global/bin" ~/.bashrc; then
-        echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
-    fi
+    # Install Node 20 (LTS)
+    nvm install 20
+    nvm use 20
+    nvm alias default 20
 fi
 
+# 3. Double-check that npm is now available
+if ! command -v npm &> /dev/null; then
+    echo "❌ FATAL: Failed to install or locate npm. Cannot install Pi Agent."
+    exit 1
+fi
+
+# 4. Configure npm to use a user-owned directory to avoid EACCES errors
+mkdir -p ~/.npm-global
+npm config set prefix '~/.npm-global'
+
+# 5. Export the path for the current script session
+export PATH="$HOME/.npm-global/bin:$PATH"
+
+# 6. Install Pi
+echo "📥 Downloading @mariozechner/pi-coding-agent..."
+npm install -g @mariozechner/pi-coding-agent
+
+# 7. Add to bashrc so 'pi' works in future terminals
+if ! grep -q "npm-global/bin" ~/.bashrc; then
+    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
+fi
+
+echo "✅ Pi Agent installed. The 'pi' command is now available."
+
+# ---------------------------------------------------------
 echo "Configuring Pi Agent models..."
 mkdir -p ~/.pi/agent/
 
@@ -54,4 +72,4 @@ cat << 'JSON' > ~/.pi/agent/models.json
 }
 JSON
 
-echo "Pi Agent Configured with Optimized VRAM/RAM Context Limits."
+echo "✅ Pi Agent Configured with Optimized VRAM/RAM Context Limits."
