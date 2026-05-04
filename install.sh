@@ -9,7 +9,7 @@ mkdir -p ~/.scripts
 mkdir -p ~/.config/systemd/user
 
 # Create symlinks
-BASE_DIR=$(pwd)
+BASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ln -sf "$BASE_DIR/bin/sys-notify" ~/.local/bin/sys-notify
 ln -sf "$BASE_DIR/bin/llm-manage" ~/.local/bin/llm-manage
 ln -sf "$BASE_DIR/bin/llm-status" ~/.local/bin/llm-status

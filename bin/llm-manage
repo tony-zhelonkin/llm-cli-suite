@@ -27,7 +27,8 @@ if [ "$COMMAND" = "load" ]; then
     curl -s http://localhost:11434/api/generate -d "{\"model\": \"$MODEL\", \"keep_alive\": -1, \"options\": {\"num_ctx\": $CTX}}" > /dev/null &
     
     # High-Precision Watcher
-    cat << 'WATCHER' > /tmp/llm_watch_script.sh
+    WATCHER_SCRIPT=$(mktemp /tmp/llm_watcher_XXXXXX.sh)
+    cat << 'WATCHER' > "$WATCHER_SCRIPT"
 #!/bin/bash
 export PATH="$PATH:$HOME/.local/bin"
 MODEL=$1
@@ -44,17 +45,18 @@ THRESHOLD=180000000
 if [[ "$MODEL" == *"26b"* || "$MODEL" == *"30b"* ]]; then THRESHOLD=15000000; fi
 
 while true; do
-    if [ ! -d "/proc/$PID" ]; then exit 1; fi
+    if [ ! -d "/proc/$PID" ]; then rm "$3" 2>/dev/null; exit 1; fi
     RSS=$(grep VmRSS /proc/$PID/status | awk '{print $2}')
     
     if [ "$RSS" -ge "$THRESHOLD" ]; then
         sys-notify "Workstation: LLM HOT" "🚀 $MODEL (Ctx: $CTX) is fully resident and ready."
+        rm "$3" 2>/dev/null
         break
     fi
     sleep 30
 done
 WATCHER
-    bash /tmp/llm_watch_script.sh "$MODEL" "$CTX" & disown
+    bash "$WATCHER_SCRIPT" "$MODEL" "$CTX" "\$WATCHER_SCRIPT" & disown
     echo "✅ High-precision watcher backgrounded. You will be notified when HOT."
 
 elif [ "$COMMAND" = "flush" ]; then
