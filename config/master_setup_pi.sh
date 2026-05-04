@@ -15,7 +15,19 @@ if ! command -v npm &> /dev/null; then
     echo '   "features": { "ghcr.io/devcontainers/features/node:1": {} }'
     echo "   Skipping Pi Agent installation."
 else
+    # Configure npm to use a user-owned directory for global installs to avoid EACCES errors
+    mkdir -p ~/.npm-global
+    npm config set prefix '~/.npm-global'
+    
+    # Ensure the new path is temporarily available for the rest of this script
+    export PATH=~/.npm-global/bin:$PATH
+    
     npm install -g @mariozechner/pi-coding-agent
+    
+    # Add the path to bashrc so the user can use 'pi' after the container starts
+    if ! grep -q "npm-global/bin" ~/.bashrc; then
+        echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+    fi
 fi
 
 echo "Configuring Pi Agent models..."
