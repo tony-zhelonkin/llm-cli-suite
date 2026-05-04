@@ -1,0 +1,44 @@
+#!/bin/bash
+# Resource Watchdog Script
+# Monitors RAM/VRAM usage and alerts statefully to avoid spam
+
+export PATH="$PATH:$HOME/.local/bin"
+
+RAM_WARN_LEVEL=0
+VRAM_WARN_LEVEL=0
+
+while true; do
+    # Get RAM usage percentage
+    RAM_TOTAL=$(free -m | awk '/^Mem:/{print $2}')
+    RAM_USED=$(free -m | awk '/^Mem:/{print $3}')
+    RAM_PERCENT=$(( 100 * RAM_USED / RAM_TOTAL ))
+
+    # Get VRAM usage percentage
+    VRAM_TOTAL=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits)
+    VRAM_USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits)
+    VRAM_PERCENT=$(( 100 * VRAM_USED / VRAM_TOTAL ))
+
+    # RAM Logic (Stateful)
+    if [ "$RAM_PERCENT" -ge 99 ] && [ "$RAM_WARN_LEVEL" -lt 99 ]; then
+        sys-notify "⚠️ CRITICAL: System RAM at ${RAM_PERCENT}%" "Workstation RAM is maxed out. Severe OOM risk."
+        RAM_WARN_LEVEL=99
+    elif [ "$RAM_PERCENT" -ge 90 ] && [ "$RAM_WARN_LEVEL" -lt 90 ]; then
+        sys-notify "⚠️ WARNING: System RAM at ${RAM_PERCENT}%" "RAM threshold crossed. Pipelines may be constrained."
+        RAM_WARN_LEVEL=90
+    elif [ "$RAM_PERCENT" -lt 85 ]; then
+        RAM_WARN_LEVEL=0 # Reset when it cools down
+    fi
+
+    # VRAM Logic (Stateful)
+    if [ "$VRAM_PERCENT" -ge 99 ] && [ "$VRAM_WARN_LEVEL" -lt 99 ]; then
+        sys-notify "⚠️ CRITICAL: GPU VRAM at ${VRAM_PERCENT}%" "RTX 5000 VRAM is nearly full."
+        VRAM_WARN_LEVEL=99
+    elif [ "$VRAM_PERCENT" -ge 90 ] && [ "$VRAM_WARN_LEVEL" -lt 90 ]; then
+        sys-notify "⚠️ WARNING: GPU VRAM at ${VRAM_PERCENT}%" "VRAM threshold crossed."
+        VRAM_WARN_LEVEL=90
+    elif [ "$VRAM_PERCENT" -lt 85 ]; then
+        VRAM_WARN_LEVEL=0 # Reset when it cools down
+    fi
+
+    sleep 60
+done

@@ -1,0 +1,25 @@
+#!/bin/bash
+# Notifier Script
+# Sends secure push notifications via Pushover
+
+if [ ! -f "$HOME/.config/pushover.env" ]; then
+    echo "⚠️ Error: Secret file $HOME/.config/pushover.env is missing."
+    exit 1
+fi
+
+source "$HOME/.config/pushover.env"
+
+if [[ -z "$PUSHOVER_USER" || -z "$PUSHOVER_TOKEN" || "$PUSHOVER_USER" == "REPLACE_ME_USER_KEY" ]]; then
+    echo "⚠️ Error: Pushover secrets are not configured in $HOME/.config/pushover.env"
+    exit 1
+fi
+
+TITLE="${1:-System Notification}"
+MESSAGE="${2:-No message provided}"
+
+curl -s \
+  --form-string "token=$PUSHOVER_TOKEN" \
+  --form-string "user=$PUSHOVER_USER" \
+  --form-string "title=$TITLE" \
+  --form-string "message=$MESSAGE" \
+  https://api.pushover.net/1/messages.json > /dev/null

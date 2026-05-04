@@ -1,0 +1,76 @@
+#!/bin/bash
+# Model Management Script
+# Interactively load and flush Ollama models
+
+COMMAND=$1
+# Allow user to specify context as a second argument, or default to 32768
+CTX=${2:-32768}
+export PATH="$PATH:$HOME/.local/bin"
+
+if [ "$COMMAND" = "load" ]; then
+    echo "Fetching available models..."
+    ollama list | tail -n +2 | awk '{print $1}' > /tmp/ollama_models.txt
+    MODEL=$(cat /tmp/ollama_models.txt | fzf --prompt="Select model to LOAD (Context set to $CTX): " --height=15 --reverse)
+    if [ -z "$MODEL" ]; then echo "Cancelled."; exit 0; fi
+
+    # Safety check for the 480B beast
+    if [[ "$MODEL" == *"480b"* && "$CTX" -gt 8192 ]]; then
+        echo "⚠️  WARNING: Loading Qwen 480B with context > 8192 often causes OOM on this hardware."
+        echo "   (Consider CTRL+C now and running: llm-manage load 4096)"
+        sleep 3
+    fi
+
+    echo "🚀 Triggering background load for $MODEL (Keep-Alive: Infinite, Context: $CTX)..."
+    sys-notify "Workstation: LLM Mapping" "Initiating mapping for $MODEL (Ctx: $CTX). Kernel paging starting."
+    
+    # Trigger API load with explicit context size
+    curl -s http://localhost:11434/api/generate -d "{\"model\": \"$MODEL\", \"keep_alive\": -1, \"options\": {\"num_ctx\": $CTX}}" > /dev/null &
+    
+    # High-Precision Watcher
+    cat << 'WATCHER' > /tmp/llm_watch_script.sh
+#!/bin/bash
+export PATH="$PATH:$HOME/.local/bin"
+MODEL=$1
+CTX=$2
+
+while true; do
+    PID=$(pgrep -f "ollama runner.*$MODEL" | head -n 1)
+    if [ -n "$PID" ]; then break; fi
+    sleep 5
+done
+
+# Dynamic thresholding based on model size
+THRESHOLD=180000000 
+if [[ "$MODEL" == *"26b"* || "$MODEL" == *"30b"* ]]; then THRESHOLD=15000000; fi
+
+while true; do
+    if [ ! -d "/proc/$PID" ]; then exit 1; fi
+    RSS=$(grep VmRSS /proc/$PID/status | awk '{print $2}')
+    
+    if [ "$RSS" -ge "$THRESHOLD" ]; then
+        sys-notify "Workstation: LLM HOT" "🚀 $MODEL (Ctx: $CTX) is fully resident and ready."
+        break
+    fi
+    sleep 30
+done
+WATCHER
+    bash /tmp/llm_watch_script.sh "$MODEL" "$CTX" & disown
+    echo "✅ High-precision watcher backgrounded. You will be notified when HOT."
+
+elif [ "$COMMAND" = "flush" ]; then
+    echo "Fetching loaded models..."
+    ollama ps | tail -n +2 | awk '{print $1}' > /tmp/ollama_loaded.txt
+    MODEL=$(cat /tmp/ollama_loaded.txt | fzf --prompt="Select model to FLUSH: " --height=15 --reverse)
+    if [ -z "$MODEL" ]; then echo "Cancelled."; exit 0; fi
+    
+    echo "🧹 Flushing $MODEL..."
+    curl -s http://localhost:11434/api/generate -d "{\"model\": \"$MODEL\", \"keep_alive\": 0}" > /dev/null
+    echo "✅ Flushed."
+    sys-notify "Workstation: LLM Flushed" "$MODEL unloaded."
+else
+    echo "Usage: llm-manage [load|flush] [num_ctx]"
+    echo ""
+    echo "  Examples:"
+    echo "    llm-manage load       # Loads model with default 32k context"
+    echo "    llm-manage load 4096  # Loads model with safe 4k context (Recommended for 480B)"
+fi

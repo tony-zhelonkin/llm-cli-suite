@@ -1,0 +1,49 @@
+#!/bin/bash
+# Project Sync Tool
+# Dynamically discovers Devcontainers and propagates the master setup script
+
+MASTER="$HOME/.scripts/master_setup_pi.sh"
+
+# Define the root directories where you keep your projects
+WORKSPACE_ROOTS=(
+    "/data1/users/antonz/projects"
+    "/scratch/current/antonz/projects"
+    "/data2/users"
+)
+
+if [ ! -f "$MASTER" ]; then
+    echo "⚠️ Error: Master script $MASTER not found."
+    exit 1
+fi
+
+echo "🔍 Scanning for Devcontainers in workspaces..."
+
+# Find all directories named ".devcontainer" up to 4 levels deep from the roots
+# Level 4 allows for /data2/users/antonz/projects/myproject/.devcontainer
+FOUND_DEVCONTAINERS=()
+for ROOT in "${WORKSPACE_ROOTS[@]}"; do
+    if [ -d "$ROOT" ]; then
+        # Read the output of find into an array safely
+        while IFS= read -r -d $'\0' dir; do
+            FOUND_DEVCONTAINERS+=("$dir")
+        done < <(find "$ROOT" -maxdepth 4 -type d -name ".devcontainer" -print0 2>/dev/null)
+    fi
+done
+
+if [ ${#FOUND_DEVCONTAINERS[@]} -eq 0 ]; then
+    echo "⚠️ No Devcontainers found in the defined workspaces."
+    exit 0
+fi
+
+echo "🔄 Syncing Pi Setup Master to ${#FOUND_DEVCONTAINERS[@]} projects..."
+
+for DEV_DIR in "${FOUND_DEVCONTAINERS[@]}"; do
+    # Target path: project/.devcontainer/scripts/setup_pi.sh
+    TARGET="$DEV_DIR/scripts/setup_pi.sh"
+    
+    mkdir -p "$(dirname "$TARGET")"
+    cp "$MASTER" "$TARGET"
+    echo "✅ Synced: $TARGET"
+done
+
+echo "🎉 Sync complete. Devcontainers are now ready for rebuild."
