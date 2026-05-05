@@ -28,21 +28,9 @@ if ! command -v npm &> /dev/null; then
     exit 1
 fi
 
-# Configure npm to use a user-owned directory to avoid EACCES errors
-mkdir -p ~/.npm-global
-npm config set prefix '~/.npm-global'
-
-# Export the path for the current script session
-export PATH="$HOME/.npm-global/bin:$PATH"
-
-# Install Pi
+# Install Pi natively via NVM's global space (no custom prefix needed)
 echo "📥 Downloading @mariozechner/pi-coding-agent..."
 npm install -g @mariozechner/pi-coding-agent
-
-# Add to bashrc so 'pi' works in future terminals
-if ! grep -q "npm-global/bin" ~/.bashrc; then
-    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
-fi
 
 echo "✅ Pi Agent installed. The 'pi' command is now available."
 
