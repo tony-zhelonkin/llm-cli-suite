@@ -1,78 +1,89 @@
 #!/bin/bash
 # Model Management Script
-# Interactively load and flush Ollama models
+# Architecture: Single-model residency for GPU efficiency.
 
 COMMAND=$1
-# Allow user to specify context as a second argument, or default to 32768
-CTX=${2:-32768}
+TARGET=$2
+CTX=${3:-32768}
 export PATH="$PATH:$HOME/.local/bin"
 
+# 1. Alias Resolution
+case "$TARGET" in
+    "gemma") MODEL="gemma4:31b" ;;
+     "qwen3.6-dense") MODEL="batiai/qwen3.6-27b:iq4" ;;
+    "fuse")  MODEL="Sub01/FuseO1-DeepSeekR1-QwQ-SkyT1-Flash-32B-Preview:q4_K_M" ;;
+    "r1")    MODEL="hengwen/DeepSeek-R1-Distill-Qwen-32B:q4_K_M" ;;
+     "qwen3.6-moe") MODEL="qwen3.6:35b" ;;
+    *)       MODEL="$TARGET" ;;
+esac
+
+# 2. Logic: Flush (Unload everything)
+function flush_all() {
+    echo "🧹 Clearing VRAM (Unloading all models)..."
+    ollama ps | tail -n +2 | awk '{print $1}' > /tmp/loaded_models.txt
+    while read m; do
+        if [ -n "$m" ]; then
+            curl -s http://localhost:11434/api/generate -d "{\"model\": \"$m\", \"keep_alive\": 0}" > /dev/null
+            echo "  - Unloaded $m"
+        fi
+    done < /tmp/loaded_models.txt
+}
+
+# 3. Logic: Load (Ensures clean state then pulls into VRAM)
+function load_model() {
+    local m_target=$1
+    local c_target=$2
+
+    # Interactive selector if no model provided
+    if [ -z "$m_target" ]; then
+        echo "Fetching available models..."
+        ollama list | tail -n +2 | awk '{print $1}' > /tmp/ollama_models.txt
+        m_target=$(cat /tmp/ollama_models.txt | fzf --prompt="Select model to LOAD (Context: $c_target): " --height=15 --reverse)
+        if [ -z "$m_target" ]; then echo "Cancelled."; exit 0; fi
+    fi
+
+    flush_all
+    
+    echo "🚀 Loading $m_target (Context: $c_target)..."
+    sys-notify "Workstation: LLM Mapping" "Initiating mapping for $m_target (Ctx: $c_target)."
+    
+    # Trigger API load
+    curl -s http://localhost:11434/api/generate -d "{\"model\": \"$m_target\", \"keep_alive\": -1, \"options\": {\"num_ctx\": $c_target}}" > /dev/null &
+    
+    # Watcher Logic
+    local WATCHER_FILE=$(mktemp /tmp/llm_watcher_XXXXXX.sh)
+    echo '#!/bin/bash' > "$WATCHER_FILE"
+    echo "MODEL_W=$m_target" >> "$WATCHER_FILE"
+    echo "CTX_W=$c_target" >> "$WATCHER_FILE"
+    echo "while true; do" >> "$WATCHER_FILE"
+    echo '  PID=$(pgrep -f "ollama runner.*$MODEL_W" | head -n 1)' >> "$WATCHER_FILE"
+    echo '  [ -n "$PID" ] && break' >> "$WATCHER_FILE"
+    echo '  sleep 5' >> "$WATCHER_FILE"
+    echo "done" >> "$WATCHER_FILE"
+    echo "THRESHOLD=15000000" >> "$WATCHER_FILE"
+    echo "while true; do" >> "$WATCHER_FILE"
+    echo '  [ ! -d "/proc/$PID" ] && break' >> "$WATCHER_FILE"
+    echo '  RSS=$(grep VmRSS /proc/$PID/status | awk "{print \$2}")' >> "$WATCHER_FILE"
+    echo '  if [ "$RSS" -ge "$THRESHOLD" ]; then' >> "$WATCHER_FILE"
+    echo '    sys-notify "Workstation: LLM HOT" "🚀 $MODEL_W (Ctx: $CTX_W) is ready."' >> "$WATCHER_FILE"
+    echo "    break" >> "$WATCHER_FILE"
+    echo "  fi" >> "$WATCHER_FILE"
+    echo "  sleep 15" >> "$WATCHER_FILE"
+    echo "done" >> "$WATCHER_FILE"
+    echo 'rm "$0"' >> "$WATCHER_FILE"
+    
+    bash "$WATCHER_FILE" & disown
+}
+
+# 4. Main Router
 if [ "$COMMAND" = "load" ]; then
-    echo "Fetching available models..."
-    ollama list | tail -n +2 | awk '{print $1}' > /tmp/ollama_models.txt
-    MODEL=$(cat /tmp/ollama_models.txt | fzf --prompt="Select model to LOAD (Context set to $CTX): " --height=15 --reverse)
-    if [ -z "$MODEL" ]; then echo "Cancelled."; exit 0; fi
-
-    # Safety check for the 480B beast
-    if [[ "$MODEL" == *"480b"* && "$CTX" -gt 8192 ]]; then
-        echo "⚠️  WARNING: Loading Qwen 480B with context > 8192 often causes OOM on this hardware."
-        echo "   (Consider CTRL+C now and running: llm-manage load 4096)"
-        sleep 3
-    fi
-
-    echo "🚀 Triggering background load for $MODEL (Keep-Alive: Infinite, Context: $CTX)..."
-    sys-notify "Workstation: LLM Mapping" "Initiating mapping for $MODEL (Ctx: $CTX). Kernel paging starting."
-    
-    # Trigger API load with explicit context size
-    curl -s http://localhost:11434/api/generate -d "{\"model\": \"$MODEL\", \"keep_alive\": -1, \"options\": {\"num_ctx\": $CTX}}" > /dev/null &
-    
-    # High-Precision Watcher
-    WATCHER_SCRIPT=$(mktemp /tmp/llm_watcher_XXXXXX.sh)
-    cat << 'WATCHER' > "$WATCHER_SCRIPT"
-#!/bin/bash
-export PATH="$PATH:$HOME/.local/bin"
-MODEL=$1
-CTX=$2
-
-while true; do
-    PID=$(pgrep -f "ollama runner.*$MODEL" | head -n 1)
-    if [ -n "$PID" ]; then break; fi
-    sleep 5
-done
-
-# Dynamic thresholding based on model size
-THRESHOLD=180000000 
-if [[ "$MODEL" == *"26b"* || "$MODEL" == *"30b"* ]]; then THRESHOLD=15000000; fi
-
-while true; do
-    if [ ! -d "/proc/$PID" ]; then rm "$3" 2>/dev/null; exit 1; fi
-    RSS=$(grep VmRSS /proc/$PID/status | awk '{print $2}')
-    
-    if [ "$RSS" -ge "$THRESHOLD" ]; then
-        sys-notify "Workstation: LLM HOT" "🚀 $MODEL (Ctx: $CTX) is fully resident and ready."
-        rm "$3" 2>/dev/null
-        break
-    fi
-    sleep 30
-done
-WATCHER
-    bash "$WATCHER_SCRIPT" "$MODEL" "$CTX" "\$WATCHER_SCRIPT" & disown
-    echo "✅ High-precision watcher backgrounded. You will be notified when HOT."
-
+    load_model "$MODEL" "$CTX"
 elif [ "$COMMAND" = "flush" ]; then
-    echo "Fetching loaded models..."
-    ollama ps | tail -n +2 | awk '{print $1}' > /tmp/ollama_loaded.txt
-    MODEL=$(cat /tmp/ollama_loaded.txt | fzf --prompt="Select model to FLUSH: " --height=15 --reverse)
-    if [ -z "$MODEL" ]; then echo "Cancelled."; exit 0; fi
-    
-    echo "🧹 Flushing $MODEL..."
-    curl -s http://localhost:11434/api/generate -d "{\"model\": \"$MODEL\", \"keep_alive\": 0}" > /dev/null
-    echo "✅ Flushed."
-    sys-notify "Workstation: LLM Flushed" "$MODEL unloaded."
+    flush_all
+    sys-notify "Workstation: LLM Clear" "VRAM cleared."
 else
-    echo "Usage: llm-manage [load|flush] [num_ctx]"
+    echo "Usage: llm-manage [load|flush] [alias|model] [num_ctx]"
     echo ""
-    echo "  Examples:"
-    echo "    llm-manage load       # Loads model with default 32k context"
-    echo "    llm-manage load 4096  # Loads model with safe 4k context (Recommended for 480B)"
+    echo "Aliases: gemma, qwen3.6-dense, qwen3.6-moe, fuse, r1"
+    echo "Example: llm-manage load qwen3.6-dense 16384"
 fi
