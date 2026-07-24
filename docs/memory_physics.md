@@ -78,12 +78,33 @@ Even with the runner constrained, if `pi` asks for a 262k window, the API reques
 
 ---
 
-## TL;DR
+## Epilogue — how the story actually ended: the 480B is retired
 
-- A 480B model takes ~200GB for weights, and ~80GB for a 32k KV Cache.
-- To prevent OOM crashes, limit the 480B context window to **8192** at boot.
-- To prevent VRAM spillover and maintain high speed on 30B models, limit them to **32768** context.
-- Use `VmRSS` in `/proc` to measure true physical RAM load, not `mmap` virtual mappings.
+The fixes stabilised the machine, but they did not make the 480B *usable*.
+
+Even fully tamed — weights resident, context clamped to 8192 to stay alive — the 480B ran 
+220-250GB RAM system DDR5 across the PCIe bus at **2–5 tokens/sec**, 
+after a **14-20 minute** cold start off the HDD. 
+
+So I stopped running it. The `qwen3-coder:480b` is **retired** from the working set. What I
+actually use is the 27–35B tier: fully resident in the 32GB card with a real 128k window (thanks
+to `q8_0` KV-cache quantization), at 15–80 tokens/sec. 
+
+It does not need any of the survival tricks in this note.
+
+This note stays as the record of *why* the Titan doesn't work here — so a future me doesn't
+re-pull 290GB expecting magic. The mmap/VmRSS and KV-cache lessons below are still true and still
+useful; the 480B is just the cautionary example that taught them.
 
 ---
-_Created: 2026-05-04 | Context: Educational log of empirical troubleshooting to stabilize a local 480-billion parameter LLM against aggressive agent context requests._
+
+## TL;DR
+
+- **The 480B is retired** 
+- A 480B model takes ~200GB for weights, and ~80GB for a 32k KV Cache — the KV spike could also OOM
+- Use `VmRSS` in `/proc` to measure true physical RAM load, not `mmap` virtual mappings.
+- On the tier I kept: `q8_0` KV-cache quantization keeps a 30–35B model **plus** a 128k window
+  entirely in the 32GB card — no spillover, high speed.
+
+---
+_Created: 2026-05-04 · Epilogue 2026-07-07 | Context: Empirical log of stabilising a local 480B LLM against aggressive agent context requests — and the decision to retire it as unusable in favour of the 27–35B tier._
