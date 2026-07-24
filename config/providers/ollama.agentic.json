@@ -1,0 +1,23 @@
+{
+  "_comment": "SINGLE SOURCE OF TRUTH for the Pi agent's local-model list.",
+  "_policy": "Agentic (tool-capable) models ONLY. Reasoning-only models (FuseO1, DeepSeek-R1) are deliberately excluded — they do not tool-call and 400 the agent. They live in Continue/chat configs, not here. See docs/decisions/ADR-001-agentic-only-single-source-of-truth.md.",
+  "_bridge": "baseUrl uses the Docker bridge 172.17.0.1 for devcontainers. On the host itself, localhost:11434 is equivalent; the installer rewrites it per environment.",
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://172.17.0.1:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        { "id": "batiai/qwen3.6-27b:iq4", "name": "Qwen 3.6 27B Dense (Primary Agent)", "reasoning": false, "contextWindow": 131072 },
+        { "id": "qwen3-coder:30b", "name": "Qwen 3 Coder 30B (Specialized Code)", "reasoning": false, "contextWindow": 131072 },
+        { "id": "qwen3.6:35b", "name": "Qwen 3.6 35B MoE (Fast Agent)", "reasoning": false, "contextWindow": 131072 },
+        { "id": "qwen3.6:35b-a3b", "name": "Qwen 3.6 35B A3B (Super Fast)", "reasoning": false, "contextWindow": 131072 },
+        { "id": "gemma4:31b", "name": "Gemma 4 31B Dense (Multimodal Agent)", "reasoning": false, "contextWindow": 131072 }
+      ]
+    }
+  }
+}

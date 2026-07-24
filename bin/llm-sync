@@ -3,8 +3,11 @@
 # Dynamically discovers Devcontainers and propagates the master setup script
 
 MASTER="$HOME/.scripts/master_setup_pi.sh"
+# The provider model lists are separate files (single sources of truth) shipped
+# next to the installer so master_setup_pi.sh can read them inside the container.
+MODELS="$(dirname "$MASTER")/providers"
 
-# Define the root directories where you keep your projects
+# Define the root directories where I keep my projects
 WORKSPACE_ROOTS=(
     "/data1/users/antonz/projects"
     "/scratch/current/antonz/projects"
@@ -26,7 +29,7 @@ for ROOT in "${WORKSPACE_ROOTS[@]}"; do
         # Read the output of find into an array safely
         while IFS= read -r -d $'\0' dir; do
             FOUND_DEVCONTAINERS+=("$dir")
-        done < <(find "$ROOT" -maxdepth 4 -type d -name ".devcontainer" -print0 2>/dev/null)
+        done < <(find "$ROOT" -maxdepth 4 -type d -name ".devcontainer" -not -path "*/.ref/*" -print0 2>/dev/null)
     fi
 done
 
@@ -43,6 +46,11 @@ for DEV_DIR in "${FOUND_DEVCONTAINERS[@]}"; do
     
     mkdir -p "$(dirname "$TARGET")"
     cp "$MASTER" "$TARGET"
+    # Ship all provider lists next to the installer for in-container rendering.
+    if compgen -G "$MODELS/*.json" > /dev/null; then
+        mkdir -p "$(dirname "$TARGET")/providers"
+        cp "$MODELS"/*.json "$(dirname "$TARGET")/providers/"
+    fi
     echo "✅ Synced: $TARGET"
 done
 

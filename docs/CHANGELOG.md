@@ -1,5 +1,19 @@
 # Changelog
 
+### 3.1.0 — 2026-07-22 (per-provider model lists)
+
+**`config/models.agentic.json` → `config/providers/*.json` (one file per provider).**
+The single agentic list became a directory keyed by provider, so a non-Ollama backend (e.g. a
+vLLM diffusion endpoint) can be added as its own file without touching the installer. Behavioural
+no-op for the existing Ollama set — verified byte-identical output.
+
+- `config/providers/ollama.agentic.json` — the former `models.agentic.json`, unchanged content.
+- `config/master_setup_pi.sh` (v3.1.0) — `render_pi_models()` loops `providers/*.json` and keys
+  the per-provider `baseUrl` rewrite on env (`OLLAMA_HOST`); a `BASH_SOURCE` guard lets a verifier
+  source the exact transform.
+- `bin/llm-sync` — ships the whole `providers/` dir next to the installer.
+- `docs/plan/2026-07-22-diffusiongemma-providers-rollout/` — phased rollout plan (Phase 1 = this).
+
 ### 3.0.0 — 2026-07-07 (single source of truth + agentic-only + docs)
 
 **Model list: one source of truth, agentic-only.**
