@@ -13,6 +13,8 @@ card with Ollama), so a mutex ships alongside.
   enabled by default (must not autostart and steal the GPU). Uses the `+cu129` venv.
 - `bin/gpu-switch {ollama|diffusion|off|status}` — the GPU mutex: stops the other tenant, waits for
   the card to drain, starts the target. Seed of the rollout's Phase 3.
+- `bin/llm-host-setup {diffusion|status}` — idempotent host provisioner (unit + ufw + gpu-switch
+  symlink); replaces the copy-paste sudo block so host setup lives in code, not a doc.
 - `docs/diffusiongemma-testing.md` — end-to-end runbook (install unit, ufw bridge rule, gpu-switch,
   point Pi at it) + what to / not to conclude from the constrained FP8 config.
 - Backed by `docs/agent-research/2026-07-26-diffusiongemma-cuda12-compat/` (compat research +

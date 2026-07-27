@@ -17,17 +17,15 @@ context, exclusive use of the GPU**.
 | GPU mutex | `bin/gpu-switch` | frees the card, flips Ollama ⇄ DiffusionGemma |
 
 ## One-time host setup
+One idempotent command provisions everything (unit + firewall + `gpu-switch` on PATH). It needs
+sudo because it installs a system service and a firewall rule — legitimate host-operator territory —
+but it's one verb, re-runnable, and a no-op where already applied:
 ```bash
-# 1. install the unit (do NOT enable — must not autostart and grab the GPU)
-sudo cp systemd/diffusiongemma.service /etc/systemd/system/
-sudo systemctl daemon-reload
-
-# 2. let the Docker bridge reach :11435 (same rule Ollama needed on 11434)
-sudo ufw allow from 172.17.0.0/16 to any port 11435 proto tcp
-
-# 3. put gpu-switch on PATH (or call bin/gpu-switch directly)
-sudo ln -sf "$PWD/bin/gpu-switch" /usr/local/bin/gpu-switch
+bin/llm-host-setup diffusion      # re-run after a git pull to refresh the unit
+bin/llm-host-setup status         # what's provisioned
 ```
+Works for **both** host-shell Pi and containerised Pi — on Linux the bridge IP `172.17.0.1:11435`
+is reachable from the host itself, so no separate host config is needed.
 
 ## Test loop
 ```bash

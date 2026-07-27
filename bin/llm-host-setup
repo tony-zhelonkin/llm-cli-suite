@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# llm-host-setup — idempotent host provisioning for the llm-cli-suite.
+#
+# Encapsulates the one-time, sudo-requiring host mutations that a doc used to ask
+# you to copy-paste. Re-runnable: each step checks its own state and is a no-op if
+# already applied. Installing a system service + firewall rule genuinely needs
+# root — that's why this is an explicit operator command, not something the
+# per-container installer does silently — but you run ONE verb, not three.
+#
+#   llm-host-setup diffusion    # install diffusiongemma.service + ufw + gpu-switch
+#   llm-host-setup status       # show what's provisioned
+#
+# Safe to re-run after `git pull` to pick up an updated unit file.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+UNIT_SRC="$REPO/systemd/diffusiongemma.service"
+UNIT_DST=/etc/systemd/system/diffusiongemma.service
+VENV=/data1/venvs/diffusion
+BRIDGE_CIDR=172.17.0.0/16
+PORT=11435
+
+say() { printf '  %s\n' "$*"; }
+
+provision_diffusion() {
+  echo "→ provisioning DiffusionGemma host prerequisites"
+
+  # 0. sanity: the cu129 venv the unit depends on
+  if [[ -x "$VENV/bin/vllm" ]]; then say "✓ venv present ($VENV)"
+  else say "✗ venv missing: $VENV/bin/vllm — build it before starting the service"; fi
+
+  # 1. systemd unit (copy only if changed; never auto-enable)
+  if [[ ! -f "$UNIT_DST" ]] || ! cmp -s "$UNIT_SRC" "$UNIT_DST"; then
+    sudo cp "$UNIT_SRC" "$UNIT_DST"
+    sudo systemctl daemon-reload
+    say "✓ installed/updated $UNIT_DST (+ daemon-reload)"
+  else
+    say "✓ unit already current"
+  fi
+  say "  note: deliberately NOT enabled — start on demand via 'gpu-switch diffusion'"
+
+  # 2. firewall: let the Docker bridge reach the port (only if ufw is active)
+  if command -v ufw >/dev/null && sudo ufw status | grep -q "Status: active"; then
+    if sudo ufw status | grep -qE "$PORT.*$BRIDGE_CIDR"; then
+      say "✓ ufw rule already present ($BRIDGE_CIDR → $PORT)"
+    else
+      sudo ufw allow from "$BRIDGE_CIDR" to any port "$PORT" proto tcp
+      say "✓ ufw rule added ($BRIDGE_CIDR → $PORT)"
+    fi
+  else
+    say "• ufw inactive/absent — skipping firewall rule (host Pi & bridge reach it directly)"
+  fi
+
+  # 3. put gpu-switch on PATH
+  if [[ "$(readlink -f /usr/local/bin/gpu-switch 2>/dev/null || true)" == "$REPO/bin/gpu-switch" ]]; then
+    say "✓ gpu-switch already linked"
+  else
+    sudo ln -sf "$REPO/bin/gpu-switch" /usr/local/bin/gpu-switch
+    say "✓ linked gpu-switch → /usr/local/bin/gpu-switch"
+  fi
+
+  echo "→ done. Test with:  gpu-switch diffusion  (then curl localhost:$PORT/v1/models)"
+}
+
+status() {
+  echo "diffusion unit : $([[ -f "$UNIT_DST" ]] && systemctl is-enabled diffusiongemma.service 2>/dev/null || echo 'not installed')"
+  echo "gpu-switch     : $(command -v gpu-switch >/dev/null && echo "$(command -v gpu-switch)" || echo 'not on PATH')"
+  echo "venv           : $([[ -x "$VENV/bin/vllm" ]] && echo present || echo MISSING)"
+  command -v ufw >/dev/null && { echo "ufw :$PORT rule :"; sudo ufw status | grep "$PORT" || echo "  (none)"; }
+}
+
+case "${1:-}" in
+  diffusion) provision_diffusion ;;
+  status|"") status ;;
+  *) echo "usage: llm-host-setup {diffusion|status}" >&2; exit 2 ;;
+esac
