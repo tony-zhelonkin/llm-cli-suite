@@ -26,7 +26,7 @@ Environment=VLLM_USE_V2_MODEL_RUNNER=1
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 ExecStart=/data1/venvs/diffusion/bin/vllm serve RedHatAI/diffusiongemma-26B-A4B-it-FP8-dynamic \
   --host 0.0.0.0 --port 11435 --trust-remote-code \
-  --max-num-seqs 1 --max-model-len 8192 --gpu-memory-utilization 0.90 \
+  --max-num-seqs 1 --max-model-len 14000 --gpu-memory-utilization 0.90 \
   --enforce-eager --enable-chunked-prefill \
   --hf-overrides '{"diffusion_sampler":"entropy_bound","diffusion_entropy_bound":0.1}' \
   --diffusion-config '{"canvas_length":256}' \
