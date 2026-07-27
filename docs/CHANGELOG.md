@@ -1,5 +1,21 @@
 # Changelog
 
+### 3.2.0 — 2026-07-26 (data-driven provider seam)
+
+**The renderer no longer special-cases Ollama.** Phase 1 (3.1.0) split the model list into
+`config/providers/*.json` but the baseUrl rewrite still hardcoded a `case ollama)`. Now each
+provider file declares its own `_hostEnv` (env var that overrides the host) and `_defaultHost`;
+`render_pi_models()` resolves the host by indirect expansion and appends `/v1` — no provider name
+is special-cased. A non-Ollama backend (HF / vLLM diffusion endpoint) drops in as its own JSON
+file with **zero renderer edits**. This is the clean architectural seam the second-provider
+rollout needed.
+
+- `config/providers/ollama.agentic.json` — adds `_hostEnv: "OLLAMA_HOST"` + `_defaultHost`.
+- `config/master_setup_pi.sh` (v3.2.0) — generic per-provider host rewrite; both private fields
+  stripped from the rendered output.
+- Verified: Ollama-only render is **byte-identical** to 3.1.0 (NO-OP gate); a two-provider render
+  (temp `diffusion.json`) rewrites each host from its own env var with no code change.
+
 ### 3.1.0 — 2026-07-22 (per-provider model lists)
 
 **`config/models.agentic.json` → `config/providers/*.json` (one file per provider).**

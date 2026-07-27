@@ -1,6 +1,9 @@
 #!/bin/bash
 # Master Setup Script for Pi Agent
 # Managed by llm-sync
+# v3.2.0: Data-driven provider seam — each config/providers/*.json declares its
+#         own _hostEnv/_defaultHost; the renderer rewrites baseUrl generically,
+#         so a non-Ollama backend (HF/vLLM) needs only its own file, no code edit.
 # v3.1.0: Model lists live in config/providers/*.json (one file per provider);
 #         agentic/tool-capable models only; reasoning-only models removed.
 
@@ -10,31 +13,36 @@
 render_pi_models() {
     local providers_dir="$1"
     local output_file="$2"
-    local provider_file provider_name bridge
+    local provider_file provider_name host_env default_host host
     local base_urls='{}'
     local provider_files=("$providers_dir"/*.json)
 
+    # Data-driven baseUrl rewrite: each provider file declares its own
+    # `_hostEnv` (env var that overrides the host) and `_defaultHost`. The
+    # host is resolved per environment and `/v1` appended — no provider name
+    # is special-cased here, so a new backend (HF/vLLM diffusion, etc.) needs
+    # only its own JSON file, never a renderer edit.
     for provider_file in "${provider_files[@]}"; do
         provider_name="$(jq -r '
             .providers | keys_unsorted
             | if length == 1 then .[0] else empty end
         ' "$provider_file")" || return 1
+        host_env="$(jq -r '._hostEnv // empty' "$provider_file")" || return 1
+        default_host="$(jq -r '._defaultHost // empty' "$provider_file")" || return 1
 
-        case "$provider_name" in
-            ollama)
-                bridge="${OLLAMA_HOST:-http://172.17.0.1:11434}"
-                base_urls="$(jq -cn \
-                    --argjson current "$base_urls" \
-                    --arg provider "$provider_name" \
-                    --arg base "${bridge%/}/v1" \
-                    '$current + {($provider): $base}')" || return 1
-                ;;
-        esac
+        # A provider without _hostEnv keeps its file baseUrl verbatim.
+        [[ -n "$provider_name" && -n "$default_host" ]] || continue
+        host="${!host_env:-$default_host}"
+        base_urls="$(jq -cn \
+            --argjson current "$base_urls" \
+            --arg provider "$provider_name" \
+            --arg base "${host%/}/v1" \
+            '$current + {($provider): $base}')" || return 1
     done
 
     jq --argjson base_urls "$base_urls" -s '
         map(
-            del(._comment, ._policy, ._bridge)
+            del(._comment, ._policy, ._bridge, ._hostEnv, ._defaultHost)
             | .providers |= with_entries(
                 if $base_urls[.key] != null
                 then .value.baseUrl = $base_urls[.key]

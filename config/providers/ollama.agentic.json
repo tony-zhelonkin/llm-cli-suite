@@ -2,6 +2,8 @@
   "_comment": "SINGLE SOURCE OF TRUTH for the Pi agent's local-model list.",
   "_policy": "Agentic (tool-capable) models ONLY. Reasoning-only models (FuseO1, DeepSeek-R1) are deliberately excluded — they do not tool-call and 400 the agent. They live in Continue/chat configs, not here. See docs/decisions/ADR-001-agentic-only-single-source-of-truth.md.",
   "_bridge": "baseUrl uses the Docker bridge 172.17.0.1 for devcontainers. On the host itself, localhost:11434 is equivalent; the installer rewrites it per environment.",
+  "_hostEnv": "OLLAMA_HOST",
+  "_defaultHost": "http://172.17.0.1:11434",
   "providers": {
     "ollama": {
       "baseUrl": "http://172.17.0.1:11434/v1",
