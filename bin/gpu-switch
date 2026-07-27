@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# gpu-switch — mutually-exclusive GPU tenancy for the single 32GB card.
+#
+# WHY: Phase 0 (2026-07-26) measured DiffusionGemma FP8 at ~31GB resident. A
+# resident Ollama model is 15-23GB. They cannot co-reside on one 32GB card, so
+# the GPU hosts exactly ONE server at a time. This flips between them safely:
+# stop the outgoing tenant, WAIT for the card to actually drain, then start the
+# incoming one. Single-user station — stopping either service freely is fine.
+#
+#   gpu-switch ollama      # Ollama resident (the default coding tier)
+#   gpu-switch diffusion   # DiffusionGemma resident (:11435, experimental)
+#   gpu-switch off         # free the GPU (stop both)
+#   gpu-switch status      # who holds the card
+#
+# Needs sudo for systemctl (passwordless or interactive).
+set -euo pipefail
+
+DIFFUSION_UNIT=diffusiongemma.service
+OLLAMA_UNIT=ollama.service
+FREE_MIB=1500          # consider the card "free" below this (CUDA ctx leaves a little)
+WAIT_SECS=60
+
+gpu_used_mib() { nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1 | tr -d ' '; }
+
+wait_until_free() {
+  local waited=0
+  while (( $(gpu_used_mib) > FREE_MIB )); do
+    (( waited >= WAIT_SECS )) && { echo "⚠️  GPU still shows $(gpu_used_mib) MiB after ${WAIT_SECS}s — check 'nvidia-smi'." >&2; return 1; }
+    sleep 3; waited=$((waited+3))
+  done
+}
+
+status() {
+  echo "GPU used: $(gpu_used_mib) MiB / 32760"
+  for u in "$OLLAMA_UNIT" "$DIFFUSION_UNIT"; do
+    printf '  %-24s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || echo inactive)"
+  done
+}
+
+case "${1:-}" in
+  diffusion)
+    echo "→ freeing GPU from Ollama…"
+    sudo systemctl stop "$OLLAMA_UNIT" 2>/dev/null || true
+    wait_until_free
+    echo "→ starting DiffusionGemma (loads ~26GB, ~1-2 min)…"
+    sudo systemctl start "$DIFFUSION_UNIT"
+    echo "   watch: journalctl -fu $DIFFUSION_UNIT   |   ready when :11435/v1/models responds"
+    ;;
+  ollama)
+    echo "→ freeing GPU from DiffusionGemma…"
+    sudo systemctl stop "$DIFFUSION_UNIT" 2>/dev/null || true
+    wait_until_free
+    echo "→ starting Ollama…"
+    sudo systemctl start "$OLLAMA_UNIT"
+    ;;
+  off)
+    sudo systemctl stop "$DIFFUSION_UNIT" "$OLLAMA_UNIT" 2>/dev/null || true
+    wait_until_free && echo "GPU freed."
+    ;;
+  status|"") status ;;
+  *) echo "usage: gpu-switch {ollama|diffusion|off|status}" >&2; exit 2 ;;
+esac

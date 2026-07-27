@@ -1,5 +1,23 @@
 # Changelog
 
+### 3.3.0 — 2026-07-26 (DiffusionGemma as a second provider — experimental)
+
+**Wires the verified FP8 DiffusionGemma endpoint into the suite so Pi can use it.** Rides the 3.2.0
+data-driven seam — no renderer change. GPU tenancy is exclusive (FP8 ~31GB won't share the 32GB
+card with Ollama), so a mutex ships alongside.
+
+- `config/providers/diffusion.json` — registers `RedHatAI/diffusiongemma-26B-A4B-it-FP8-dynamic`
+  on `:11435`, keyed on `DIFFUSION_HOST`. Marked EXPERIMENTAL (8k ctx). llm-sync already ships it;
+  the renderer merges it automatically (Ollama render verified unchanged).
+- `systemd/diffusiongemma.service` — the exact Phase 0 `vllm serve` command as a host unit. Not
+  enabled by default (must not autostart and steal the GPU). Uses the `+cu129` venv.
+- `bin/gpu-switch {ollama|diffusion|off|status}` — the GPU mutex: stops the other tenant, waits for
+  the card to drain, starts the target. Seed of the rollout's Phase 3.
+- `docs/diffusiongemma-testing.md` — end-to-end runbook (install unit, ufw bridge rule, gpu-switch,
+  point Pi at it) + what to / not to conclude from the constrained FP8 config.
+- Backed by `docs/agent-research/2026-07-26-diffusiongemma-cuda12-compat/` (compat research +
+  MEASUREMENT_phase0.md + venv freeze).
+
 ### 3.2.0 — 2026-07-26 (data-driven provider seam)
 
 **The renderer no longer special-cases Ollama.** Phase 1 (3.1.0) split the model list into

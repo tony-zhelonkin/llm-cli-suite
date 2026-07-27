@@ -1,0 +1,39 @@
+# DiffusionGemma (vLLM OpenAI /v1 server) — host unit, port 11435.
+#
+# Wraps the EXACT command verified in Phase 0 (2026-07-26) on BMD-LC-01:
+#   RTX 5000 Ada (32GB) · driver 565.57.01 (frozen) · vLLM 0.26.0+cu129 venv.
+# The +cu129 wheels run on the 12.7 driver via CUDA minor-version compatibility —
+# do NOT `pip install vllm` from PyPI here (that pulls cu130 → needs driver >=580).
+#
+# GPU tenancy is EXCLUSIVE: FP8 resident is ~31GB, so this cannot share the card
+# with a resident Ollama model. Start/stop via `gpu-switch`, not directly.
+#
+# Install:  sudo cp systemd/diffusiongemma.service /etc/systemd/system/
+#           sudo systemctl daemon-reload
+# (Do NOT `enable` — it must not autostart and grab the GPU from Ollama at boot.)
+
+[Unit]
+Description=DiffusionGemma vLLM OpenAI server (:11435, exclusive GPU)
+After=network-online.target
+Wants=network-online.target
+# Advisory: never run alongside Ollama on the same GPU.
+Conflicts=ollama.service
+
+[Service]
+Type=simple
+User=antonz
+Environment=VLLM_USE_V2_MODEL_RUNNER=1
+Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+ExecStart=/data1/venvs/diffusion/bin/vllm serve RedHatAI/diffusiongemma-26B-A4B-it-FP8-dynamic \
+  --host 0.0.0.0 --port 11435 --trust-remote-code \
+  --max-num-seqs 1 --max-model-len 8192 --gpu-memory-utilization 0.90 \
+  --enforce-eager --enable-chunked-prefill \
+  --hf-overrides '{"diffusion_sampler":"entropy_bound","diffusion_entropy_bound":0.1}' \
+  --diffusion-config '{"canvas_length":256}' \
+  --enable-auto-tool-choice --tool-call-parser gemma4 --reasoning-parser gemma4
+# vLLM has no sd_notify; give it time to load ~26GB of weights before readiness checks.
+TimeoutStartSec=300
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
