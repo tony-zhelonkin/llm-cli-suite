@@ -56,7 +56,7 @@ case "${1:-}" in
     echo "→ freeing GPU from Ollama…"
     run sudo systemctl stop "$OLLAMA_UNIT" 2>/dev/null || true
     wait_until_free
-    echo "→ starting DiffusionGemma (loads ~26GB, ~1-2 min)…"
+    echo "→ starting DiffusionGemma (loads ~15GB W4A16, ~1-2 min)…"
     run sudo systemctl start "$DIFFUSION_UNIT"
     # Type=simple returns instantly; the model still needs ~90s to load. Poll until it
     # actually answers so this command doesn't lie about readiness.
