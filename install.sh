@@ -17,6 +17,9 @@ ln -sf "$BASE_DIR/bin/llm-sync" ~/.local/bin/llm-sync
 ln -sf "$BASE_DIR/bin/gpu-switch" ~/.local/bin/gpu-switch
 ln -sf "$BASE_DIR/bin/sys-ram-watchdog" ~/.local/bin/sys-ram-watchdog
 ln -sf "$BASE_DIR/config/master_setup_pi.sh" ~/.scripts/master_setup_pi.sh
+# llm-sync ships these provider lists into each devcontainer; keep the staging
+# dir pointed at the repo so a new backend (e.g. diffusion.json) propagates.
+ln -sfn "$BASE_DIR/config/providers" ~/.scripts/providers
 ln -sf "$BASE_DIR/systemd/sys-ram-watchdog.service" ~/.config/systemd/user/sys-ram-watchdog.service
 
 # Setup Systemd

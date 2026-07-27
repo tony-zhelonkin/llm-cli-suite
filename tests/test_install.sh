@@ -35,6 +35,12 @@ eq "gpu-switch link resolves into the repo" \
 # The renderer must be reachable where install puts it.
 ok "master_setup_pi.sh linked into ~/.scripts" test -e "$FAKE/.scripts/master_setup_pi.sh"
 
+# llm-sync ships providers from ~/.scripts/providers; if install doesn't stage it,
+# `compgen` silently skips and devcontainers never learn a new backend (diffusion).
+ok "providers/ staged for llm-sync in ~/.scripts" test -e "$FAKE/.scripts/providers/diffusion.json"
+eq "providers staging resolves into the repo" \
+   "$REPO/config/providers" "$(readlink -f "$FAKE/.scripts/providers" 2>/dev/null)"
+
 # Idempotent: a second run must not error and must leave the same links.
 run_install
 ok "install.sh is idempotent (second run exits 0)" test $? -eq 0
