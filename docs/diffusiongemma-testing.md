@@ -72,6 +72,7 @@ no longer the constraint at 128k. This is a single-stream config (`--max-num-seq
 
 ## Next, if it earns its place
 
-- Try co-residency: at ~15GB weights it might share the card with a 15GB Ollama model if diffusion
-  KV is capped — that would retire `gpu-switch` for the pair.
 - Decide whether it's an agentic model or a chat-only one, and promote it out of the experimental corner.
+
+`gpu-switch` stays: one 32GB card holds one model at a time. Running Ollama and diffusion together
+is a question for a second GPU, not something to squeeze onto this one.
