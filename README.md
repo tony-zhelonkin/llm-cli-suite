@@ -63,6 +63,11 @@ Create `~/.config/pushover.env` with your keys if you want notifications.
 
 ## Docs
 
+**Field notes (the story):**
+- [`docs/story-why-not-480b.md`](docs/story-why-not-480b.md) — the 480B experiment and fitting the GPU instead.
+- [`docs/story-serving-a-diffusion-llm.md`](docs/story-serving-a-diffusion-llm.md) — getting DiffusionGemma onto a frozen-driver 32GB box.
+
+**Reference:**
 - [`docs/memory_physics.md`](docs/memory_physics.md) — KV cache, the `mmap` spill trap, why 480B OOM'd.
 - [`docs/ollama-tuning.md`](docs/ollama-tuning.md) — global tuning: KV quantization, flash attention.
 - [`docs/modelfile-surgery.md`](docs/modelfile-surgery.md) — baking context and samplers per model.
