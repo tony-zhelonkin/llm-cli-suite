@@ -1,9 +1,3 @@
-2026-07-07
-tags: [[LLM]], [[Ollama]], [[Hardware]], [[KV Cache]]
-alias: [[Ollama tuning]], [[Flash Attention]], [[KV Cache Quantization]]
-categories: [[Server Administration]], [[BioInformatics]]
-related: [[LLM - The Physics of KV Cache and 480B OOM Crashes]], [[LLM Workstation CLI Tools]]
-
 # Ollama — Global Tuning: KV Cache Quantization, Flash Attention, and Where It All Lives
 
 > **What this is**: the one place that explains the *centralised* Ollama tuning on this

@@ -1,11 +1,3 @@
----
-date: 2026-07-08
-subject: Serving Google DiffusionGemma-26B-A4B as a non-Ollama endpoint for the Pi agent fleet
-tags: [[LLM]], [[DiffusionGemma]], [[vLLM]], [[Ollama]], [[DevContainers]]
-status: research — decisions pending
-related: [[devcontainer-ollama-passthrough]], [[ollama-tuning]], [[memory_physics]]
----
-
 # DiffusionGemma serving — research inventory
 
 **Why this exists.** We want to run `google/diffusiongemma-26B-A4B-it` (real diffusion-decoding

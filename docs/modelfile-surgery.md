@@ -1,9 +1,3 @@
-2026-07-07
-tags: [[LLM]], [[Ollama]], [[Modelfile]], [[Context Window]]
-alias: [[Modelfile surgery]], [[num_ctx]]
-categories: [[Server Administration]], [[BioInformatics]]
-related: [[ollama-tuning]], [[Ollama-Modelfiles-and-Context-Management]]
-
 # Ollama — Modelfile Surgery: Baking `num_ctx` and Samplers into a Model
 
 > **What this is**: the per-model layer of tuning. This is the part I had *forgotten I did* — I

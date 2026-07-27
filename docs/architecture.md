@@ -1,10 +1,4 @@
-2026-05-04
-tags: [[LLM]], [[Agentic coding]], [[Bash]], [[System Administration]]
-alias: [[llm-manage]], [[llm-status]], [[sys-notify]], [[llm-sync]]
-categories: [[BioInformatics]], [[Server Administration]]
-related: [[LLM - Pi Agent Configuration and VRAM Management in Devcontainers]], [[LLM - The Physics of KV Cache and 480B OOM Crashes]]
-
-# LLM — LLM Workstation CLI Tools for Hardware and Model Management
+# Architecture — Workstation CLI tools for local-model management
 
 > **Problem solved**: Replaced arbitrary shell commands with a clean, decoupled, and secure set of CLI tools to manually load, flush, monitor, and sync massive LLMs (like Qwen 480B) across multiple bioinformatics projects.
 

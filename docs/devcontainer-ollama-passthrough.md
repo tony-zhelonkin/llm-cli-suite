@@ -1,9 +1,3 @@
-2026-07-07
-tags: [[LLM]], [[Docker]], [[DevContainers]], [[Ollama]], [[Pi Agent]]
-alias: [[Ollama passthrough]], [[devcontainer ollama]], [[172.17.0.1 bridge]]
-categories: [[Server Administration]], [[BioInformatics]]
-related: [[ollama-tuning]], [[LLM - Pi Agent Configuration and VRAM Management]]
-
 # DevContainer → Host Ollama Passthrough (Pi agent over local models)
 
 > **What this is**: how to make the Pi coding agent *inside a Docker devcontainer* talk to the

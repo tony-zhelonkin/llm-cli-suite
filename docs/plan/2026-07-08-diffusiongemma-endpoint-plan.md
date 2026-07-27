@@ -1,13 +1,3 @@
----
-date: 2026-07-08
-subject: Next actionable steps — DiffusionGemma non-Ollama endpoint
-status: plan — verification-gated, no code written yet
-tags: [[LLM]], [[DiffusionGemma]], [[vLLM]], [[Ollama]], [[Plan]]
-related:
-  - [[docs/agent-research/2026-07-08-diffusiongemma-serving/README]]
-  - [[devcontainer-ollama-passthrough]]
----
-
 # Plan — DiffusionGemma as a non-Ollama endpoint
 
 **Goal.** Serve `google/diffusiongemma-26B-A4B-it` (true diffusion decoding) behind the same

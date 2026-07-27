@@ -1,10 +1,4 @@
-2026-05-04
-tags: [[LLM]], [[Hardware]], [[RAM]], [[Debugging]], [[Ollama]]
-alias: [[KV Cache Physics]], [[480B OOM]], [[mmap trap]]
-categories: [[Server Administration]], [[BioInformatics]]
-related: [[LLM Workstation CLI Tools]]
-
-# LLM — The Physics of KV Cache, The mmap Trap, and 480B OOM Crashes
+# The physics of KV cache, the mmap trap, and 480B OOM crashes
 
 > **Problem solved**: Diagnosed and resolved repeated Linux Out-Of-Memory (OOM) crashes and silent deadlocks when attempting to run a 480 Billion parameter model (`qwen3-coder:480b`) on a workstation with 512GB DDR5 RAM and 32GB VRAM. Discovered that the crashes were caused not by the model weights, but by aggressive default KV Cache allocations triggered by the `pi` coding agent.
 
