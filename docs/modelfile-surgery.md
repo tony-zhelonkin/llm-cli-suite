@@ -10,7 +10,7 @@
 ## Why this exists
 
 Ollama defaults a model's context window to something small (4k). The global systemd override
-([[ollama-tuning]]) changes *how* the cache is stored, but not *how big* it is — that ceiling is
+([ollama-tuning.md](ollama-tuning.md)) changes *how* the cache is stored, but not *how big* it is — that ceiling is
 per-model, and it lives in the Modelfile. If a model reports a tiny context to the Pi agent or
 goes stupid past ~30k tokens, its Modelfile is missing `num_ctx`.
 
@@ -62,7 +62,8 @@ What the knobs buy me:
   one for agentic coding. It also sets the KV-cache VRAM budget (mitigated by `q8_0`).
 - **`temperature`** — 0.7 for the code models (deterministic, strict), 1.0 for the general/
   multimodal ones (a little more range).
-- **`repeat_penalty ~1.05`** — keeps small MoE models from looping.
+- **`repeat_penalty ~1.05`** — keeps small MoE models from looping too much 
+ruminating on their internal thoughts fighting each other.
 - **`stop` tokens** — the Qwen chat template boundaries, so generation halts cleanly.
 
 ---

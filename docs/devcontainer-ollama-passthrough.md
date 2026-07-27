@@ -32,7 +32,7 @@ must all be true, and each is a separate failure point:
 
 ## Step 1 — Host: bind Ollama to 0.0.0.0
 
-In the systemd override (`systemd/ollama.override.conf`, see [[ollama-tuning]]):
+In the systemd override (`systemd/ollama.override.conf`, see [ollama-tuning.md](ollama-tuning.md)):
 
 ```ini
 Environment="OLLAMA_HOST=0.0.0.0"

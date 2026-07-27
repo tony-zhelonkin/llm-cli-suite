@@ -15,7 +15,7 @@ I kept half-remembering this wrong, so here it is flat:
    flash attention. → `systemd/ollama.override.conf`.
 2. **Per-model (Modelfile):** the *size* of the context window (`num_ctx`) and the sampler
    behaviour (temperature, top_k, penalties) baked into each individual model. → `modelfiles/`,
-   see [[modelfile-surgery]].
+   see [modelfile-surgery.md](modelfile-surgery.md).
 
 If a model is "stupid after 30k tokens" that is layer 2 (its Modelfile `num_ctx`). If the KV
 cache is eating too much VRAM, that is layer 1 (the cache type). They are independent.
@@ -77,13 +77,13 @@ sudo systemctl restart ollama.service
 With `q8_0` + flash attention, the 27–35B models sit entirely in the 32GB card with a real 128k
 window and run at 15–80 t/s. That is the tier I actually use. The 480B "Titan" that motivated the
 original OOM firefighting is retired — it ran at 2–5 t/s out of system RAM and was unusable as an
-interactive agent (see [[ADR-002-retire-480b-titan]]).
+interactive agent (the 480B was retired as unusable — see the origin story).
 
 ---
 
 ## TL;DR
 
 - KV cache quantization and flash attention are **global**, in the systemd override — one file.
-- Context window size and samplers are **per-model**, in the Modelfiles — see [[modelfile-surgery]].
+- Context window size and samplers are **per-model**, in the Modelfiles — see [modelfile-surgery.md](modelfile-surgery.md).
 - `q8_0` roughly halves KV-cache VRAM; that headroom is what keeps a 35B + 128k fully on the GPU.
 - Models on `/data2` (HDD array), bind `0.0.0.0` for Docker, `keep_alive -1` to pin.

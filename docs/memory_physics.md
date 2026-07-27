@@ -1,6 +1,8 @@
 # The physics of KV cache, the mmap trap, and 480B OOM crashes
 
-> **Problem solved**: Diagnosed and resolved repeated Linux Out-Of-Memory (OOM) crashes and silent deadlocks when attempting to run a 480 Billion parameter model (`qwen3-coder:480b`) on a workstation with 512GB DDR5 RAM and 32GB VRAM. Discovered that the crashes were caused not by the model weights, but by aggressive default KV Cache allocations triggered by the `pi` coding agent.
+The memory math behind [why I stopped chasing the 480B model](story-why-not-480b.md). The OOM
+crashes weren't the weights — they were the KV cache the agent's long context requests forced open.
+This is how that works, and how to reason about the VRAM budget on a single card.
 
 ---
 
@@ -99,6 +101,3 @@ useful; the 480B is just the cautionary example that taught them.
 - Use `VmRSS` in `/proc` to measure true physical RAM load, not `mmap` virtual mappings.
 - On the tier I kept: `q8_0` KV-cache quantization keeps a 30–35B model **plus** a 128k window
   entirely in the 32GB card — no spillover, high speed.
-
----
-_Created: 2026-05-04 · Epilogue 2026-07-07 | Context: Empirical log of stabilising a local 480B LLM against aggressive agent context requests — and the decision to retire it as unusable in favour of the 27–35B tier._
