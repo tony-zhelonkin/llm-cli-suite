@@ -47,7 +47,7 @@ wait_until_free() {
 status() {
   echo "GPU used: $(gpu_used_mib) MiB / 32760"
   for u in "$OLLAMA_UNIT" "$DIFFUSION_UNIT"; do
-    printf '  %-24s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || echo inactive)"
+    printf '  %-24s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null | head -1)"
   done
 }
 
