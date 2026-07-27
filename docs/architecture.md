@@ -27,8 +27,9 @@ Each lives in `bin/`, symlinked into `~/.local/bin` by `install.sh`.
 
 ## The provider seam
 
-The agent reads one `models.json`. I don't write it by hand — it's rendered from
-`config/providers/*.json`, one file per backend.
+The agent reads one `models.json`. 
+
+I don't write it by hand — it's rendered from `config/providers/*.json`, one file per backend.
 
 `config/master_setup_pi.sh` merges those files and rewrites each backend's host for the environment
 it's rendering into (host shell vs. the Docker bridge). Each provider file declares its own host
@@ -49,7 +50,7 @@ config/providers/diffusion.json        ─┼─►  master_setup_pi.sh  ─► 
   bleed into each other.
 - **Config is data, code is generic.** New models and new backends are edits to JSON, not to scripts.
 - **VmRSS, not guesswork.** Residency is measured from `/proc`, so "loaded" means the weights are
-  physically in memory — Ollama accepting the load isn't enough.
+  physically in memory, Ollama accepting the load isn't enough.
 - **Hysteresis in monitoring.** Warm and cool thresholds (90% / 85%) stop the watchdog flapping.
 
 ## Quickstart
