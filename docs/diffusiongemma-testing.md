@@ -22,26 +22,17 @@ Measured 2026-07-26: runs on the frozen 565 driver via the `+cu129` vLLM stack, 
 ## The vLLM venv (what actually serves the model)
 
 The server runs from `/data1/venvs/diffusion` — the systemd unit's `ExecStart` points straight at
-`/data1/venvs/diffusion/bin/vllm`. This venv is the runtime; without it the service can't start.
-It carries a specific stack because the driver is frozen at 565: everything is `+cu129` (CUDA 12.9),
-which runs on the 12.7 driver by minor-version compatibility. The plain PyPI `vllm`/`torch` are
-built for CUDA 13 and won't load.
+`/data1/venvs/diffusion/bin/vllm`. This venv is the runtime; without it the service can't start. Its
+definition lives in the repo under [`serving/diffusion/`](../serving/diffusion/) (pinned
+requirements + lockfile + builder), so it's reproducible rather than hand-built.
 
 ```bash
-python3 -m venv /data1/venvs/diffusion
-source /data1/venvs/diffusion/bin/activate
-
-# torch trio — all +cu129, or vLLM's import dies (torchvision::nms / torchaudio .so)
-pip install torch==2.11.0+cu129 torchvision==0.26.0+cu129 torchaudio==2.11.0+cu129 \
-  --index-url https://download.pytorch.org/whl/cu129
-
-# vLLM 0.26 — the cu129 wheel from the GitHub release (cp38-abi3 runs on 3.10)
-pip install "https://github.com/vllm-project/vllm/releases/download/v0.26.0/vllm-0.26.0%2Bcu129-cp38-abi3-manylinux_2_28_x86_64.whl" \
-  --extra-index-url https://download.pytorch.org/whl/cu129
+serving/diffusion/build-venv.sh          # builds + verifies at the default path
+LOCK=1 serving/diffusion/build-venv.sh   # byte-exact rebuild from the lockfile
 ```
 
-Exact frozen set: `docs/agent-research/2026-07-26-diffusiongemma-cuda12-compat/venv_freeze_cu129.txt`.
-Why this particular stack, and the driver story behind it, is in
+Everything is pinned `+cu129` because the driver is frozen at 565 — the whole story, and why that
+matters, is in [`serving/diffusion/README.md`](../serving/diffusion/README.md) and
 [`story-serving-a-diffusion-llm.md`](story-serving-a-diffusion-llm.md).
 
 ## One-time host setup

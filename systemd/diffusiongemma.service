@@ -4,6 +4,7 @@
 #   RTX 5000 Ada (32GB) · driver 565.57.01 (frozen) · vLLM 0.26.0+cu129 venv.
 # The +cu129 wheels run on the 12.7 driver via CUDA minor-version compatibility —
 # do NOT `pip install vllm` from PyPI here (that pulls cu130 → needs driver >=580).
+# Build the venv reproducibly with: serving/diffusion/build-venv.sh
 #
 # Model: W4A16 int4 (compressed-tensors, Marlin MoE kernels work on Ada SM 8.9).
 # ~15GB weights → ~13GB KV → 128k context.

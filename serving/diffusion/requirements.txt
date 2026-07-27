@@ -1,0 +1,19 @@
+# DiffusionGemma vLLM server — the load-bearing runtime, pinned.
+#
+# Everything is +cu129 (CUDA 12.9) on purpose: the driver is frozen at 565
+# (CUDA 12.7), and a cu129 build runs on it by CUDA minor-version compatibility.
+# The plain PyPI vllm/torch are built for CUDA 13 and will NOT load on 565.
+#
+# Python 3.10 (the vLLM wheel is cp38-abi3, so it runs on 3.10+).
+# Build with:  serving/diffusion/build-venv.sh
+# For a byte-exact rebuild instead, use requirements.lock.txt.
+
+--extra-index-url https://download.pytorch.org/whl/cu129
+
+# torch trio — all must match, or vLLM's import dies (torchvision::nms / torchaudio .so)
+torch==2.11.0+cu129
+torchvision==0.26.0+cu129
+torchaudio==2.11.0+cu129
+
+# vLLM 0.26 — the cu129 wheel from the GitHub release (not the PyPI cu130 build)
+vllm @ https://github.com/vllm-project/vllm/releases/download/v0.26.0/vllm-0.26.0%2Bcu129-cp38-abi3-manylinux_2_28_x86_64.whl
