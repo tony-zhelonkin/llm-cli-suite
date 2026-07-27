@@ -96,9 +96,34 @@ The feel and quality of the diffusion decode, and whether tool-calling behaves u
 no longer the constraint at 128k. This is a single-stream config (`--max-num-seqs 1`,
 `--enforce-eager`), so it's about behaviour, not multi-user throughput.
 
+## The verdict (2026-07-27): good decode, unreliable agent
+
+Drove it under Pi, host and container. **The infrastructure is sound** — every real Pi request
+returns 200, and the `gemma4` parser returns clean structured `tool_calls` in both streaming and
+non-streaming when the model emits one (verified with a direct `curl` to `:11435`). Tool calls *do*
+execute.
+
+**But it's inconsistent at agentic tool use.** A diffusion decoder denoises a whole canvas at once,
+so sometimes the output lands cleanly on the `gemma4` tool-call tokens (the parser extracts it, the
+call runs) and sometimes it lands off them — the raw `call:bash{command:<|"|>…<|"|>}` delimiters
+leak into chat as plain text, or the command comes out malformed (`ls -F *}`), or it forgets it
+already called and apologizes. This is inherent to a **diffusion** model at an **aggressive int4
+quant**, and there's little to steady it: vLLM **rejects `temperature`, `min_p`, `seed`,
+`min_tokens`, `logit_bias`** for diffusion models (400), so the usual sampling knobs are off the
+table.
+
+So: a capable *chat / reasoning* model with a genuinely novel decode, not a dependable *agent* on
+this quant. Multi-step tool-driven work still belongs on the Ollama Qwen/Gemma models.
+
+> [!note] Client constraint for diffusion endpoints
+> Any client pointed at `:11435` must **not** send `temperature`/`min_p`/`seed`/`min_tokens`/
+> `logit_bias` — vLLM 400s on them for diffusion models. Pi doesn't send them (all its requests are
+> 200); a hand-rolled `curl` or a differently-configured client will need them omitted.
+
 ## Next, if it earns its place
 
-- Decide whether it's an agentic model or a chat-only one, and promote it out of the experimental corner.
+- Treat it as chat/reasoning, not agentic, until a stronger quant or a maturer diffusion tool-call
+  path lands. Re-test tool reliability when either changes.
 
 `gpu-switch` stays: one 32GB card holds one model at a time. Running Ollama and diffusion together
 is a question for a second GPU, not something to squeeze onto this one.
