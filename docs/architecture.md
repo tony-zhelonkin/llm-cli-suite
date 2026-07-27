@@ -1,8 +1,9 @@
 # Architecture — the tools and the provider seam
 
 A set of small, single-purpose CLI tools plus a config layer that feeds local models to a coding
-agent. Nothing here is clever; the point is that each piece does one thing and the config is the
-source of truth.
+agent.
+
+Each piece does one thing, and the config is the source of truth. That's the whole idea.
 
 ## The tools
 
@@ -12,7 +13,7 @@ Each lives in `bin/`, symlinked into `~/.local/bin` by `install.sh`.
   at load time so KV cache can't grow past the VRAM budget, and watches `VmRSS` to confirm the model
   is physically resident before reporting done. Single-model residency by design.
 - **`llm-status`** — one screen: system RAM (`free`), VRAM (`nvidia-smi`), and which model is hot
-  (`ollama ps`). The first thing I run to see if anything has spilled into RAM.
+  (`ollama ps`). The first thing I run to check whether anything has spilled into RAM.
 - **`gpu-switch`** — hands the single GPU between Ollama and the vLLM diffusion server. Stops one,
   waits for VRAM to actually drain, starts the other, and polls until it's really serving. They
   can't co-reside on 32GB, so this is the mutex.
@@ -47,8 +48,8 @@ config/providers/diffusion.json        ─┼─►  master_setup_pi.sh  ─► 
 - **One responsibility per tool.** Secrets, notifications, model loading, and monitoring don't
   bleed into each other.
 - **Config is data, code is generic.** New models and new backends are edits to JSON, not to scripts.
-- **VmRSS, not guesswork.** Residency is measured from `/proc`, so "loaded" means physically in
-  memory, not just accepted by Ollama.
+- **VmRSS, not guesswork.** Residency is measured from `/proc`, so "loaded" means the weights are
+  physically in memory — Ollama accepting the load isn't enough.
 - **Hysteresis in monitoring.** Warm and cool thresholds (90% / 85%) stop the watchdog flapping.
 
 ## Quickstart
