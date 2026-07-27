@@ -1,5 +1,20 @@
 # Changelog
 
+### 3.4.0 — 2026-07-26 (DiffusionGemma W4A16 — real 128k agent)
+
+**The quant hunt succeeded: W4A16 int4 serves DiffusionGemma at 128k on the Ada card.** Desk
+research (agy) concluded int4 was blocked for the diffusion runner on Ada; the empirical test
+disproved it — vLLM 0.26 selects `MARLIN WNA16` for both linear and MoE layers and runs the
+diffusion sampler on top. ~15GB weights (vs FP8's 26GB) leave ~13GB KV → 128k context (vs 14k).
+
+- `config/providers/diffusion.json` — model → `pixelkaiser/diffusiongemma-26B-A4B-it-AWQ-MLP-W4A16`,
+  `contextWindow` 131072, no longer 'experimental'.
+- `systemd/diffusiongemma.service` — serves the W4A16 checkpoint at `--max-model-len 131072`.
+  FP8 retained only as a higher-precision fallback (in docs).
+- `docs/agent-research/2026-07-26-diffusiongemma-int4-quant-hunt/` — brief, agy report, RedHat
+  model-card analysis, synthesis (with SUPERSEDED banner), and `MEASUREMENT_w4a16.md` (the win).
+- Lesson recorded: verify negative claims empirically when the test is cheap.
+
 ### 3.3.0 — 2026-07-26 (DiffusionGemma as a second provider — experimental)
 
 **Wires the verified FP8 DiffusionGemma endpoint into the suite so Pi can use it.** Rides the 3.2.0

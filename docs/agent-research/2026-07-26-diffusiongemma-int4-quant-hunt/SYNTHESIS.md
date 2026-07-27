@@ -1,3 +1,8 @@
+> [!success] SUPERSEDED 2026-07-26 — the empirical test PASSED (see MEASUREMENT_w4a16.md)
+> The W4A16 Marlin int4 kernels DO run the DiffusionGemma diffusion runner on Ada. agy's
+> negative verdict below was wrong. W4A16 serves at **128k context** (15GB weights, 13GB KV).
+> The analysis below is retained for the record; its 'FP8@14k is the ceiling' conclusion is void.
+
 # Synthesis — can DiffusionGemma get a real agentic context on this Ada box?
 
 Sources: `report_1_ada-servable-int4-quant.md` (agy), `ref_redhat-fp8-modelcard-analysis.md`

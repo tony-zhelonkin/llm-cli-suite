@@ -1,6 +1,6 @@
 {
-  "_comment": "EXPERIMENTAL second provider — Google DiffusionGemma served by vLLM on the host.",
-  "_policy": "Agentic (tool-calling confirmed via gemma4 parser). EXPERIMENTAL: FP8 quant currently caps context at 8192 on the 32GB card (Phase 0 measurement 2026-07-26). Mutually exclusive with Ollama on the GPU — use `gpu-switch diffusion` before testing. See docs/plan/2026-07-22-diffusiongemma-providers-rollout/ and docs/agent-research/2026-07-26-diffusiongemma-cuda12-compat/MEASUREMENT_phase0.md.",
+  "_comment": "Second provider — Google DiffusionGemma served by vLLM on the host (W4A16 int4).",
+  "_policy": "Agentic (tool-calling confirmed via gemma4 parser). W4A16 (compressed-tensors, Marlin int4) verified on RTX 5000 Ada 2026-07-26: ~15GB weights leave ~13GB KV → 128k context. Mutually exclusive with Ollama on the GPU for now — use `gpu-switch diffusion` before testing. See docs/plan/2026-07-22-diffusiongemma-providers-rollout/ and docs/agent-research/2026-07-26-diffusiongemma-int4-quant-hunt/.",
   "_bridge": "baseUrl uses the Docker bridge 172.17.0.1 for devcontainers; the installer rewrites the host per environment via DIFFUSION_HOST.",
   "_hostEnv": "DIFFUSION_HOST",
   "_defaultHost": "http://172.17.0.1:11435",
@@ -14,7 +14,7 @@
         "supportsReasoningEffort": false
       },
       "models": [
-        { "id": "RedHatAI/diffusiongemma-26B-A4B-it-FP8-dynamic", "name": "DiffusionGemma 26B FP8 (EXPERIMENTAL · 14k ctx, FP8 ceiling)", "reasoning": true, "contextWindow": 14000 }
+        { "id": "pixelkaiser/diffusiongemma-26B-A4B-it-AWQ-MLP-W4A16-G64-S32-L1024", "name": "DiffusionGemma 26B W4A16 (diffusion agent, 128k)", "reasoning": true, "contextWindow": 131072 }
       ]
     }
   }

@@ -1,12 +1,16 @@
 # DiffusionGemma (vLLM OpenAI /v1 server) — host unit, port 11435.
 #
-# Wraps the EXACT command verified in Phase 0 (2026-07-26) on BMD-LC-01:
+# Wraps the command verified on BMD-LC-01 (2026-07-26):
 #   RTX 5000 Ada (32GB) · driver 565.57.01 (frozen) · vLLM 0.26.0+cu129 venv.
 # The +cu129 wheels run on the 12.7 driver via CUDA minor-version compatibility —
 # do NOT `pip install vllm` from PyPI here (that pulls cu130 → needs driver >=580).
 #
-# GPU tenancy is EXCLUSIVE: FP8 resident is ~31GB, so this cannot share the card
-# with a resident Ollama model. Start/stop via `gpu-switch`, not directly.
+# Model: W4A16 int4 (compressed-tensors, Marlin MoE kernels work on Ada SM 8.9).
+# ~15GB weights → ~13GB KV → 128k context. (FP8 was 26GB weights / 14k ctx; W4A16
+# is the daily driver, FP8 kept only as a higher-precision fallback.)
+#
+# GPU tenancy is EXCLUSIVE for now (~31GB resident at util 0.90). Co-residency with
+# a 27B Ollama model may be possible by capping KV — untested. Start via `gpu-switch`.
 #
 # Install:  sudo cp systemd/diffusiongemma.service /etc/systemd/system/
 #           sudo systemctl daemon-reload
@@ -24,9 +28,9 @@ Type=simple
 User=antonz
 Environment=VLLM_USE_V2_MODEL_RUNNER=1
 Environment=PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-ExecStart=/data1/venvs/diffusion/bin/vllm serve RedHatAI/diffusiongemma-26B-A4B-it-FP8-dynamic \
+ExecStart=/data1/venvs/diffusion/bin/vllm serve pixelkaiser/diffusiongemma-26B-A4B-it-AWQ-MLP-W4A16-G64-S32-L1024 \
   --host 0.0.0.0 --port 11435 --trust-remote-code \
-  --max-num-seqs 1 --max-model-len 14000 --gpu-memory-utilization 0.90 \
+  --max-num-seqs 1 --max-model-len 131072 --gpu-memory-utilization 0.90 \
   --enforce-eager --enable-chunked-prefill \
   --hf-overrides '{"diffusion_sampler":"entropy_bound","diffusion_entropy_bound":0.1}' \
   --diffusion-config '{"canvas_length":256}' \
