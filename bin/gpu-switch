@@ -28,11 +28,20 @@ PORT=11435             # diffusion vLLM port (readiness poll)
 gpu_used_mib() { nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1 | tr -d ' '; }
 
 wait_until_free() {
-  local waited=0
-  while (( $(gpu_used_mib) > FREE_MIB )); do
-    (( waited >= WAIT_SECS )) && { echo "⚠️  GPU still shows $(gpu_used_mib) MiB after ${WAIT_SECS}s — check 'nvidia-smi'." >&2; return 1; }
-    sleep 3; waited=$((waited+3))
+  local waited=0 used
+  used=$(gpu_used_mib)
+  # Already free — say so and return, so the caller never looks hung.
+  (( used <= FREE_MIB )) && { echo "   GPU already free (${used} MiB)."; return 0; }
+  printf '   draining GPU'
+  while (( used > FREE_MIB )); do
+    if (( waited >= WAIT_SECS )); then
+      echo; echo "⚠️  GPU still shows ${used} MiB after ${WAIT_SECS}s — a non-systemd process may hold it; check 'nvidia-smi'." >&2
+      return 1
+    fi
+    printf ' %sMiB' "$used"       # live: show the memory actually falling
+    sleep 3; waited=$((waited+3)); used=$(gpu_used_mib)
   done
+  echo " → free (${used} MiB)."
 }
 
 status() {
