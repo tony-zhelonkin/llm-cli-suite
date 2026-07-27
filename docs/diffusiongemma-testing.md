@@ -2,7 +2,7 @@
 
 **Goal:** get a *feel* for Google DiffusionGemma as a Pi coding-agent backend on the local box,
 before deciding whether to hunt a better quant. This is the FP8 build measured in Phase 0
-(2026-07-26): runs on the frozen 565 driver via the `+cu129` vLLM stack, **~31GB resident, 8k
+(2026-07-26): runs on the frozen 565 driver via the `+cu129` vLLM stack, **~31GB resident, ~14k
 context, exclusive use of the GPU**.
 
 > [!warning] One tenant on the GPU at a time
