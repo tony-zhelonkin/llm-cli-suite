@@ -12,11 +12,12 @@ card with Ollama), so a mutex ships alongside.
 - `systemd/diffusiongemma.service` — the exact Phase 0 `vllm serve` command as a host unit. Not
   enabled by default (must not autostart and steal the GPU). Uses the `+cu129` venv.
 - `bin/gpu-switch {ollama|diffusion|off|status}` — the GPU mutex: stops the other tenant, waits for
-  the card to drain, starts the target. Seed of the rollout's Phase 3.
-- `bin/llm-host-setup {diffusion|status}` — idempotent host provisioner (unit + ufw + gpu-switch
-  symlink); replaces the copy-paste sudo block so host setup lives in code, not a doc.
-- `docs/diffusiongemma-testing.md` — end-to-end runbook (install unit, ufw bridge rule, gpu-switch,
-  point Pi at it) + what to / not to conclude from the constrained FP8 config.
+  the card to drain, starts the target. Seed of the rollout's Phase 3. Every privileged command is
+  echoed before it runs (via `run()`) — no invisible sudo.
+- `docs/diffusiongemma-testing.md` — end-to-end runbook. Host setup (systemd unit + ufw) is written
+  as **explicit, explained sudo commands you run yourself**, deliberately NOT wrapped in an
+  installer script: privileged host mutations should be observable, not hidden behind an opaque
+  verb. (A wrapper was tried and reverted — it obscured the sudo *and* had a symlink-path bug.)
 - Backed by `docs/agent-research/2026-07-26-diffusiongemma-cuda12-compat/` (compat research +
   MEASUREMENT_phase0.md + venv freeze).
 

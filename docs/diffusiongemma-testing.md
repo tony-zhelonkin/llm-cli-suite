@@ -49,7 +49,7 @@ gpu-switch status                         # confirm it's the tenant
 curl -s localhost:11435/v1/models | jq '.data[].id'      # ready check
 ```
 Then in your project devcontainer, Pi's `~/.pi/agent/models.json` already lists
-**"DiffusionGemma 26B FP8 (EXPERIMENTAL · 8k ctx)"** (the diffusion provider renders automatically).
+**"DiffusionGemma 26B FP8 (EXPERIMENTAL · 14k ctx, FP8 ceiling)"** (the diffusion provider renders automatically).
 Pick it in Pi's model selector and drive it like any other model — mind the ~14k window — Pi's own system prompt eats ~8k of it.
 
 ```bash
@@ -59,7 +59,7 @@ gpu-switch ollama
 
 ## What you're evaluating (and what NOT to conclude from it)
 - **Feel / quality of the diffusion decode** and whether tool-calling behaves under Pi.
-- **NOT** speed-at-scale or long-context behaviour — this is `--max-num-seqs 1`, 8k ctx,
+- **NOT** speed-at-scale or long-context behaviour — this is `--max-num-seqs 1`, 14k ctx,
   `--enforce-eager`, all forced by the FP8 VRAM squeeze. A roomier INT4/AWQ quant
   (the follow-up hunt) would lift the context and let CUDA graphs back on.
 
