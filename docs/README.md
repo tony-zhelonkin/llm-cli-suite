@@ -11,6 +11,12 @@ pieces work). If you're here to follow the journey, read top to bottom.
    backend. Getting Google's DiffusionGemma onto a frozen-driver 32GB box, through the quant maze,
    to a 128k agent.
 
+## Start here
+
+- [`getting-started.md`](getting-started.md) — the whole path step by step (install/tune Ollama, pull
+  and bake a model, load it, then the diffusion server), plus a **Make it yours** table of everything
+  that's specific to my machine and what to change.
+
 ## Reference
 
 **The model tier (Ollama):**

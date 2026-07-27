@@ -75,6 +75,20 @@ See [`docs/architecture.md`](docs/architecture.md).
 
 Create `~/.config/pushover.env` with your keys if you want notifications.
 
+## Getting started
+
+[`docs/getting-started.md`](docs/getting-started.md) walks the whole path step by step — install and
+tune Ollama, pull and bake a model, load it, then (optionally) stand up the DiffusionGemma server —
+so you can follow in my footsteps.
+
+## Make it yours
+
+A few things are specific to my box and you'll want to change them: the workspace roots in
+`bin/llm-sync`, the model aliases in `bin/llm-manage`, the `OLLAMA_MODELS` path in the Ollama
+override, the model IDs in `config/providers/*.json`, and the `User=`/venv path in the diffusion
+unit. The `+cu129` vLLM pin is tied to my frozen driver — a modern driver can use stock vLLM. The
+full table of what to tweak is at the end of [`docs/getting-started.md`](docs/getting-started.md#make-it-yours).
+
 ## Tests
 
 ```bash
