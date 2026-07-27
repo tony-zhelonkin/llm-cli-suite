@@ -14,6 +14,7 @@ ln -sf "$BASE_DIR/bin/sys-notify" ~/.local/bin/sys-notify
 ln -sf "$BASE_DIR/bin/llm-manage" ~/.local/bin/llm-manage
 ln -sf "$BASE_DIR/bin/llm-status" ~/.local/bin/llm-status
 ln -sf "$BASE_DIR/bin/llm-sync" ~/.local/bin/llm-sync
+ln -sf "$BASE_DIR/bin/gpu-switch" ~/.local/bin/gpu-switch
 ln -sf "$BASE_DIR/bin/sys-ram-watchdog" ~/.local/bin/sys-ram-watchdog
 ln -sf "$BASE_DIR/config/master_setup_pi.sh" ~/.scripts/master_setup_pi.sh
 ln -sf "$BASE_DIR/systemd/sys-ram-watchdog.service" ~/.config/systemd/user/sys-ram-watchdog.service
