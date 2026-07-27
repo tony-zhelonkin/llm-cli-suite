@@ -1,75 +1,77 @@
-# Testing DiffusionGemma under Pi (experimental)
+# Running DiffusionGemma under Pi
 
-**Goal:** get a *feel* for Google DiffusionGemma as a Pi coding-agent backend on the local box,
-This is the W4A16 int4 build (the quant hunt succeeded — Marlin kernels run the diffusion
-arch on Ada; FP8's 14k ceiling is retired). Measured 2026-07-26: runs on the frozen 565 driver via the `+cu129` vLLM stack, **~31GB resident, 128k context (W4A16 int4), exclusive use of the GPU for now**.
+The runbook for serving Google's DiffusionGemma (W4A16 int4) to the Pi coding agent and taking it
+for a spin. The story of how it got here is in
+[`story-serving-a-diffusion-llm.md`](story-serving-a-diffusion-llm.md).
+
+Measured 2026-07-26: runs on the frozen 565 driver via the `+cu129` vLLM stack, ~31GB resident,
+128k context, sole tenant of the GPU.
 
 > [!warning] One tenant on the GPU at a time
-> DiffusionGemma (~31GB resident at util 0.90) cannot yet share the 32GB card with a resident Ollama model. Always flip
-> with `gpu-switch` — it stops the other server and waits for the card to drain first.
+> DiffusionGemma at ~31GB can't share the 32GB card with a resident Ollama model. Flip with
+> `gpu-switch` — it stops the other server and waits for the card to drain first.
 
-## The three pieces (already in this repo)
+## The three pieces (already in the repo)
+
 | Piece | File | Role |
 |---|---|---|
-| Provider registration | `config/providers/diffusion.json` | makes Pi list the model (auto-rendered by the seam) |
-| Server unit | `systemd/diffusiongemma.service` | the verified `vllm serve` command on `:11435` |
+| Provider | `config/providers/diffusion.json` | makes Pi list the model (auto-rendered by the seam) |
+| Server | `systemd/diffusiongemma.service` | the `vllm serve` command on `:11435` |
 | GPU mutex | `bin/gpu-switch` | frees the card, flips Ollama ⇄ DiffusionGemma |
 
-## One-time host setup (explicit — run each yourself)
+## One-time host setup
 
-These are privileged host mutations, so they are written out plainly rather than hidden behind a
-wrapper: read each line, then run it. All are idempotent (safe to re-run, e.g. after a `git pull`).
+Privileged host steps, written out so you run each yourself rather than through a wrapper. All
+idempotent — safe to re-run after a `git pull`.
 
 ```bash
-# 1. Install the vLLM server as a systemd unit. Copy the file, then reload systemd so it sees it.
-#    Do NOT `enable` it — it must not autostart at boot and grab the GPU from Ollama.
+# 1. Install the server as a systemd unit, then reload systemd so it sees it.
+#    Don't `enable` it — it must not autostart at boot and grab the GPU from Ollama.
 sudo cp systemd/diffusiongemma.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
-# 2. Firewall: let the Docker bridge subnet reach the vLLM port (same rule Ollama needed on 11434).
-#    Skip this if `sudo ufw status` shows "inactive" — then nothing is filtering the bridge anyway.
+# 2. Let the Docker bridge reach the port (same rule Ollama needed on 11434).
+#    Skip if `sudo ufw status` is inactive.
 sudo ufw allow from 172.17.0.0/16 to any port 11435 proto tcp
 
-# 3. Put gpu-switch on your PATH (mirrors how llm-manage/llm-status are linked into ~/.local/bin).
-#    No sudo — it's your own user PATH.
+# 3. Put gpu-switch on your PATH (install.sh does this too).
 ln -sf "$PWD/bin/gpu-switch" ~/.local/bin/gpu-switch
 ```
 
-To refresh the unit after editing `systemd/diffusiongemma.service`, re-run step 1 only.
-Works for **both** host-shell Pi and containerised Pi — on Linux the bridge IP `172.17.0.1:11435`
-is reachable from the host itself, so no separate host config is needed.
+After editing the unit, re-run step 1 only. Works for both host-shell and containerised Pi — on
+Linux the bridge IP `172.17.0.1:11435` is reachable from the host itself.
 
 ## Test loop
-```bash
-# hand the GPU to DiffusionGemma (stops Ollama, waits for drain, starts vLLM)
-gpu-switch diffusion
-gpu-switch status                         # confirm it's the tenant
-# wait for load (~1-2 min), then:
-curl -s localhost:11435/v1/models | jq '.data[].id'      # ready check
-```
-Then in your project devcontainer, Pi's `~/.pi/agent/models.json` already lists
-**"DiffusionGemma 26B W4A16 (diffusion agent, 128k)"** (the diffusion provider renders automatically).
-Pick it in Pi's model selector and drive it like any other model — full 128k window — a real agentic context.
 
 ```bash
-# when done, hand the GPU back to your normal coding tier
+gpu-switch diffusion    # stops Ollama, drains the card, starts vLLM, waits for ready
+gpu-switch status       # confirm it's the tenant
+```
+
+Then re-render Pi's config so it lists the model, preview the change, apply it:
+
+```bash
+source config/master_setup_pi.sh
+render_pi_models config/providers /tmp/models.new.json
+diff <(jq -S . ~/.pi/agent/models.json) <(jq -S . /tmp/models.new.json)
+cp /tmp/models.new.json ~/.pi/agent/models.json
+```
+
+Pick **"DiffusionGemma 26B W4A16 (diffusion agent, 128k)"** in Pi and drive it. Hand the GPU back
+when done:
+
+```bash
 gpu-switch ollama
 ```
 
-## What you're evaluating (and what NOT to conclude from it)
-- **Feel / quality of the diffusion decode** and whether tool-calling behaves under Pi.
-- **NOT** multi-user throughput — this is `--max-num-seqs 1`, `--enforce-eager`. Context is no
-  longer the constraint (128k). Quality: W4A16 recovers less than FP8 — benchmark before trusting
-  for hard tasks.
+## What you're evaluating
 
-> [!success] W4A16 int4 gives a real 128k window
-> FP8 (26GB weights) only left ~14k context and Pi autocompacted ~10k — unusable as an agent.
-> The W4A16 quant (~15GB weights, Marlin int4 kernels verified on Ada) leaves ~13GB for KV →
-> **128k context**. This is the daily-driver config; FP8 is kept only as a precision fallback.
+The feel and quality of the diffusion decode, and whether tool-calling behaves under Pi. Context is
+no longer the constraint at 128k. This is a single-stream config (`--max-num-seqs 1`,
+`--enforce-eager`), so it's about behaviour, not multi-user throughput.
 
-## If you decide to keep going
-- Context too tight → find an **INT4/AWQ/GPTQ** DiffusionGemma vLLM can serve on Ada (~13GB → bigger
-  KV, maybe even Ollama co-residency, which would retire `gpu-switch`). **NVFP4 stays excluded**
-  (Blackwell-only). Track under the rollout plan's Phase 0 follow-ups.
-- Happy with it → promote from experimental: raise `contextWindow` if the quant changes, and decide
-  the agentic-vs-chat policy (ADR-003).
+## Next, if it earns its place
+
+- Try co-residency: at ~15GB weights it might share the card with a 15GB Ollama model if diffusion
+  KV is capped — that would retire `gpu-switch` for the pair.
+- Decide whether it's an agentic model or a chat-only one, and promote it out of the experimental corner.

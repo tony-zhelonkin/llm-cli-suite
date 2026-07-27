@@ -6,8 +6,7 @@
 # do NOT `pip install vllm` from PyPI here (that pulls cu130 → needs driver >=580).
 #
 # Model: W4A16 int4 (compressed-tensors, Marlin MoE kernels work on Ada SM 8.9).
-# ~15GB weights → ~13GB KV → 128k context. (FP8 was 26GB weights / 14k ctx; W4A16
-# is the daily driver, FP8 kept only as a higher-precision fallback.)
+# ~15GB weights → ~13GB KV → 128k context.
 #
 # GPU tenancy is EXCLUSIVE for now (~31GB resident at util 0.90). Co-residency with
 # a 27B Ollama model may be possible by capping KV — untested. Start via `gpu-switch`.
