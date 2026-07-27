@@ -1,7 +1,9 @@
 # Running DiffusionGemma under Pi
 
-The runbook for serving Google's DiffusionGemma (W4A16 int4) to the Pi coding agent and taking it
-for a spin. The story of how it got here is in
+The runbook for serving Google's DiffusionGemma (W4A16 int4) to the Pi coding agent 
+and taking it for a spin. 
+
+The story of how it got here is in
 [`story-serving-a-diffusion-llm.md`](story-serving-a-diffusion-llm.md).
 
 Measured 2026-07-26: runs on the frozen 565 driver via the `+cu129` vLLM stack, ~31GB resident,

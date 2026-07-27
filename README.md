@@ -1,9 +1,13 @@
 # Local LLM Workstation Toolkit
 
 A small set of CLI tools and version-controlled config for running local LLMs on a single
-high-memory Linux workstation — managing what sits on the GPU, serving models to a coding agent,
-and keeping the box from falling over. It grew out of my own trial and error on one machine; the
-docs are written so someone with their own hardware can follow the same path.
+high-memory Linux workstation
+* managing what sits on the GPU, 
+* serving models to a coding agent,
+* and keeping the box from falling over. 
+
+It grew out of my own trial and error on one machine. I tried to write the
+docs so someone with their own hardware can follow the same path.
 
 ## The hardware it grew on
 
@@ -13,24 +17,30 @@ docs are written so someone with their own hardware can follow the same path.
 - **GPU:** NVIDIA RTX 5000 Ada — 32GB, compute capability 8.9 (Ada Lovelace)
 - **Storage:** 1TB NVMe (OS/scratch) + 2×8TB SATA (model storage)
 
-The single 32GB GPU is the whole constraint. Almost every decision here comes back to *what fits
-in 32GB, and what to do when it doesn't.*
+The single 32GB GPU is the main constraint. 
+Almost every decision here comes back to *what fits in 32GB, and what to do when it doesn't.*
 
 ## Where this started, and where it landed
 
-I began by trying to run the biggest thing I could — `qwen3-coder:480b`. It technically "ran," but
-the weights spilled out of VRAM into system RAM, so it paged off the SATA disks: 20–30 minute cold
-starts and single-digit tokens/sec. Clamping its context to survive killed the only reason to want
-a model that large. The lesson stuck: **on one 32GB card, a well-quantized 27–35B model that lives
-entirely on the GPU beats a giant that spills to RAM, every time.**
+I began by trying to run the biggest thing I could — `qwen3-coder:480b`. 
 
-That became the posture: one model resident on the GPU at a time, quantized to fit, with a real
-128k window via `q8_0` KV-cache quantization. The tools here manage that residency, and the docs
-work out the memory math behind it.
+It technically "ran," but the weights spilled out of VRAM into system RAM, so it paged off the 
+SATA disks: 20–30 minute cold starts and single-digit tokens/sec. 
+
+Clamping its context to survive killed the only reason to want a model that large. 
+The lesson stuck: **on one 32GB card, a well-quantized 27–35B model that lives
+entirely on the GPU beats a giant that spills to RAM.**
+
+So everything grew from there: 
+* one model resident on the GPU at a time, 
+* quantized to fit, with a 128k window via `q8_0` KV-cache quantization. 
+
+The tools here manage that residency, and the docs go into the general theory and details.
 
 Later I added a second kind of backend — a **diffusion** LLM (Google's DiffusionGemma) served by
-vLLM alongside Ollama, reachable by the same coding agent through a clean provider seam. Getting it
-onto a frozen-driver 32GB box was its own adventure; that story is in
+vLLM alongside Ollama, reachable by the same coding agent through a clean provider seam. 
+
+Getting it onto a frozen-driver 32GB box was its own adventure; that story is in
 [`docs/diffusiongemma-testing.md`](docs/diffusiongemma-testing.md) and the research trail under
 `docs/agent-research/`.
 
@@ -47,11 +57,15 @@ onto a frozen-driver 32GB box was its own adventure; that story is in
 
 ## Serving models to a coding agent
 
-Model lists live in `config/providers/*.json` — one file per backend. A renderer
-(`config/master_setup_pi.sh`) merges them into the agent's config and rewrites each backend's host
-per environment (host shell vs. devcontainer bridge). Adding a new backend — Ollama, a vLLM
-endpoint, anything OpenAI-compatible — is a new JSON file, no code change. See
-[`docs/architecture.md`](docs/architecture.md).
+Model lists live in `config/providers/*.json` — one file per backend. 
+
+A renderer (`config/master_setup_pi.sh`) merges them into the agent's config and rewrites each backend's host
+per environment (host shell vs. devcontainer bridge). 
+
+Adding a new backend — Ollama, a vLLM endpoint, anything OpenAI-compatible 
+is just a new JSON file, no code change. 
+
+See [`docs/architecture.md`](docs/architecture.md).
 
 ## Install
 
