@@ -20,6 +20,10 @@ pieces work). If you're here to follow the journey, read top to bottom.
   where the settings live.
 - [`modelfile-surgery.md`](modelfile-surgery.md) — baking context window and samplers into a model.
 
+**The box:**
+- [`driver-stack.md`](driver-stack.md) — the frozen NVIDIA driver + kernel + the 24 apt holds
+  everything runs against, and why it's pinned.
+
 **Serving to the agent:**
 - [`architecture.md`](architecture.md) — the CLI tools and the provider seam that feeds models to Pi.
 - [`devcontainer-ollama-passthrough.md`](devcontainer-ollama-passthrough.md) — an agent inside a
