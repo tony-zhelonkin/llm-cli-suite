@@ -27,6 +27,16 @@ PORT=11435             # diffusion vLLM port (readiness poll)
 
 gpu_used_mib() { nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1 | tr -d ' '; }
 
+# Only invoke sudo if the unit is actually running — so switching doesn't prompt
+# for a password just to "stop" something that's already inactive.
+stop_if_active() {
+  if systemctl is-active --quiet "$1"; then
+    run sudo systemctl stop "$1"
+  else
+    echo "   $1 already stopped."
+  fi
+}
+
 wait_until_free() {
   local waited=0 used
   used=$(gpu_used_mib)
@@ -54,7 +64,7 @@ status() {
 case "${1:-}" in
   diffusion)
     echo "→ freeing GPU from Ollama…"
-    run sudo systemctl stop "$OLLAMA_UNIT" 2>/dev/null || true
+    stop_if_active "$OLLAMA_UNIT"
     wait_until_free
     echo "→ starting DiffusionGemma (loads ~15GB W4A16, ~1-2 min)…"
     run sudo systemctl start "$DIFFUSION_UNIT"
@@ -72,14 +82,17 @@ case "${1:-}" in
     ;;
   ollama)
     echo "→ freeing GPU from DiffusionGemma…"
-    run sudo systemctl stop "$DIFFUSION_UNIT" 2>/dev/null || true
+    stop_if_active "$DIFFUSION_UNIT"
     wait_until_free
     echo "→ starting Ollama…"
     run sudo systemctl start "$OLLAMA_UNIT"
     ;;
   off)
-    run sudo systemctl stop "$DIFFUSION_UNIT" "$OLLAMA_UNIT" 2>/dev/null || true
-    wait_until_free && echo "GPU freed."
+    stop_if_active "$DIFFUSION_UNIT"
+    stop_if_active "$OLLAMA_UNIT"
+    # If nothing was holding the card, wait_until_free already says "already free";
+    # only add the "GPU freed" line when we actually drained something.
+    if (( $(gpu_used_mib) > FREE_MIB )); then wait_until_free && echo "GPU freed."; else echo "   GPU free ($(gpu_used_mib) MiB)."; fi
     ;;
   status|"") status ;;
   *) echo "usage: gpu-switch {ollama|diffusion|off|status}" >&2; exit 2 ;;
