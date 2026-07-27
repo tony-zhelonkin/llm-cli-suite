@@ -36,14 +36,21 @@ lands. Config-plumbing bugs and GPU-mux bugs never share a phase.
 
 ---
 
-## Phase 0 — VRAM measurement gate (manual, on-box) — BLOCKING for Phases 2/3
+## Phase 0 — VRAM measurement gate — ✅ CLOSED 2026-07-26
 
-- **Do:** pull `nvidia/diffusiongemma-26B-A4B-it-NVFP4` (or FP8), `vllm serve` it once by hand,
-  read resident VRAM from `nvidia-smi`.
-- **Exit test:** a single number. If NVFP4 < ~22GB resident → mux against Ollama on the 24GB card is
-  viable (Phase 3 needed). If ≥ card size → either it needs the ≥40GB GPU (no mux; run alongside) or
-  it's shelved. **Phases 2/3 do not start until this number exists.**
-- Independent of Phase 1 — Phase 1 can proceed in parallel since it's Ollama-only plumbing.
+Full result + reproducible serve command:
+`docs/agent-research/2026-07-26-diffusiongemma-cuda12-compat/MEASUREMENT_phase0.md`.
+
+- **Corrections to the original assumptions:** the card is **RTX 5000 Ada = 32 GB** (not 24). **NVFP4
+  is out** — it needs Blackwell 5th-gen tensor cores; Ada can't run it. **FP8** is the Ada quant.
+- **Driver stays frozen at 565.** vLLM 0.26 runs via the `+cu129` wheels (CUDA 12.9 works on the 12.7
+  driver by minor-version compat) — no driver move, no source build.
+- **Measured (RedHatAI FP8-dynamic):** weights **≈26.3 GB** resident; boots at `--gpu-memory-utilization
+  0.90 --max-model-len 8192 --enforce-eager` → **30.9 GB resident**, KV 2.03 GB (~8k ctx), tool-call
+  smoke PASS.
+- **Verdict → Phases 2/3:** FP8 **fits alone** but leaves **no room for a resident Ollama model** →
+  **Phase 3 GPU mux (`gpu-switch`) is REQUIRED**. Context ceiling ~8k at FP8; a smaller INT4/AWQ quant
+  (if one exists for Ada+vLLM) would relax both — tracked as a follow-up, NVFP4 excluded.
 
 ## Phase 1 — `providers/` refactor as a NO-OP  ← **implement first**
 
