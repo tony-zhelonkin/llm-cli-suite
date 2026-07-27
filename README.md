@@ -109,7 +109,7 @@ can't drift from tested behaviour. See [`tests/README.md`](tests/README.md).
 - [`docs/memory_physics.md`](docs/memory_physics.md) — KV cache, the `mmap` spill trap, why 480B OOM'd.
 - [`docs/ollama-tuning.md`](docs/ollama-tuning.md) — global tuning: KV quantization, flash attention.
 - [`docs/modelfile-surgery.md`](docs/modelfile-surgery.md) — baking context and samplers per model.
-- [`docs/devcontainer-ollama-passthrough.md`](docs/devcontainer-ollama-passthrough.md) — agent-in-container → host models.
+- [`docs/devcontainer-ollama-passthrough.md`](docs/devcontainer-ollama-passthrough.md) — agent-in-container → host GPU models (Ollama + diffusion): addressing, firewall, GPU mutex.
 - [`docs/diffusiongemma-testing.md`](docs/diffusiongemma-testing.md) — serving a diffusion LLM as a second provider.
 - [`docs/architecture.md`](docs/architecture.md) — the tools and the provider seam.
 </content>

@@ -1,154 +1,209 @@
-# DevContainer → Host Ollama Passthrough (Pi agent over local models)
+# DevContainer → host GPU models (Ollama *and* diffusion)
 
-> **What this is**: how to make the Pi coding agent *inside a Docker devcontainer* talk to the
-> Ollama server running on the *host* workstation, so a containerised project uses the local
-> models over the Docker bridge instead of the internet. This is the container case; running Pi
-> in a plain host shell is simpler and covered at the end.
+> **What this is:** how a coding agent (Pi) running *inside a Docker devcontainer* talks to a model
+> served on the *host workstation's GPU* — over the Docker network, not the internet. It covers both
+> backends the same way: Ollama on `:11434` and the vLLM diffusion server on `:11435`. Running Pi in
+> a plain host shell is the easy case, at the end.
+
+This is written from my own setup on one 32GB-GPU workstation with ~two dozen Compose-managed
+devcontainers. Every claim here I hit and verified on this box.
 
 ---
 
 ## The mental model
 
-Three isolated environments have to line up:
+Four things have to line up. Each is a separate, silent failure point.
 
 ```
-Host workstation                 Docker bridge            Container
-─────────────────                ─────────────            ─────────
-ollama.service                                            pi agent
-  binds 0.0.0.0:11434   ◄──────  172.17.0.1  ◄──────────  reads OLLAMA_HOST
-  (systemd override)             (gateway IP)             writes ~/.pi/agent/models.json
+Host workstation                    Docker network              Container (a Compose project)
+────────────────                    ──────────────              ─────────────────────────────
+one GPU, one model hot:                                         pi agent
+  ollama.service   0.0.0.0:11434 ◄──┐                           reads its models.json
+    OR                               ├── 172.17.0.1 ◄────────── talks to the host
+  diffusiongemma   0.0.0.0:11435 ◄──┘   (host-owned IP)         (rendered each start)
+  (gpu-switch flips between them)
 ```
 
-`172.17.0.1` is the **Docker bridge gateway** — the address a Linux container uses to reach a
-service on the host. (On Docker Desktop / Mac it is `host.docker.internal`; on native Linux it is
-the bridge IP, usually `172.17.0.1`.) For the container to reach the host Ollama, three things
-must all be true, and each is a separate failure point:
-
-1. Ollama on the host is **listening on all interfaces**, not just localhost.
-2. The host **firewall** lets the bridge subnet reach port 11434.
-3. The container **knows the address** (`OLLAMA_HOST`) and Pi's `models.json` points at it.
+1. **The GPU holds one model at a time.** Ollama and the diffusion server can't co-reside on 32GB,
+   so `gpu-switch` runs exactly one. Whichever is *not* hot has a dead port.
+2. The hot server **binds `0.0.0.0`**, not just localhost, so packets from outside the host arrive.
+3. The host **firewall** lets the container's subnet reach the port.
+4. The container **knows the address** and its `models.json` lists the provider pointing at it.
 
 ---
 
-## Step 1 — Host: bind Ollama to 0.0.0.0
+## The address: why `172.17.0.1` works from every container
 
-In the systemd override (`systemd/ollama.override.conf`, see [ollama-tuning.md](ollama-tuning.md)):
+`172.17.0.1` is the gateway of Docker's **default** bridge. The instinct is "that's the address a
+container uses to reach the host" — and that's only half true here.
+
+Compose doesn't put projects on the default bridge. Each project gets its **own** network:
+
+```
+sting-jr_devcontainer_default   → 192.168.112.0/20, gateway 192.168.112.1
+meta-aging_devcontainer_default → 192.168.128.0/20, gateway 192.168.128.1
+12868-eh_devcontainer_default   → 172.20.0.0/16,    gateway 172.20.0.1
+… (each project a different subnet, drawn from 172.16.0.0/12 and 192.168.0.0/16)
+```
+
+So a container's own gateway is `192.168.112.1`, not `172.17.0.1`. Yet `172.17.0.1:11435` still
+answers from inside every one of them. The reason: `172.17.0.1` is an address the **host itself
+owns** (it's the host's IP on docker0). A container's packet to it is routed to the host like any
+other host IP, across whatever docker interface the container sits on. So one stable address —
+`172.17.0.1` — reaches the host from any project, and that's what the provider config uses. (Each
+project's own gateway, e.g. `192.168.112.1`, works too, but it differs per project, so it's not
+useful as a shared default.)
+
+**This is the trap** → the address routing everywhere does *not* mean the firewall lets it through
+everywhere. See the next section.
+
+---
+
+## Step 1 — Host: bind the server to `0.0.0.0`
+
+**Ollama** — in the systemd override (`systemd/ollama.override.conf`, see
+[ollama-tuning.md](ollama-tuning.md)):
 
 ```ini
 Environment="OLLAMA_HOST=0.0.0.0"
 ```
-
 ```bash
 sudo systemctl daemon-reload && sudo systemctl restart ollama.service
 ```
 
-Without this, Ollama listens only on `127.0.0.1` and the container's packets never arrive.
+**Diffusion** — already handled: `systemd/diffusiongemma.service` runs `vllm serve … --host 0.0.0.0`.
 
-> Security: `0.0.0.0` exposes the un-authenticated API to every interface, gated only by the host
-> firewall. On a box used purely for local/SSH inference, prefer `127.0.0.1`. See `SECURITY.md`.
+Without `0.0.0.0` the server listens only on `127.0.0.1` and the container's packets never arrive.
 
-## Step 2 — Host: open the firewall for the bridge
+> Security: `0.0.0.0` exposes an un-authenticated API on every interface, gated only by the host
+> firewall. On a box used purely for local/SSH inference that's the trade-off; see `SECURITY.md`.
 
-Even with Ollama on `0.0.0.0`, a hardened host drops the container's packets until you allow the
-port. This was a real, silent timeout the first time:
+## Step 2 — Host: open the firewall for *all* the container subnets
+
+This is the one that bit me. A hardened host silently **drops** the container's packets until the
+port is allowed — and the allow has to match the container's **source subnet**.
+
+Because each Compose project is on its own network (`192.168.x`, `172.18`–`172.31`, …), a rule
+scoped to the default bridge `172.17.0.0/16` matches almost nothing. The packet routes fine, hits
+the firewall, gets dropped, and the agent just says **`Request timed out`** — no error, no refusal.
+
+Mirror Ollama's rule (open on the port), which is what makes it work from every project:
 
 ```bash
-sudo ufw allow 11434/tcp comment 'Ollama API (Docker bridge)'
+sudo ufw allow 11434/tcp comment 'Ollama API'
+sudo ufw allow 11435/tcp comment 'DiffusionGemma vLLM API'
 ```
 
-## Step 3 — Container: hand it the bridge address
+Check what you've got with `sudo ufw status numbered | grep 1143`. *Refused* from a container means
+firewall-open-but-nothing-listening (that backend isn't the hot one). *Timeout* means the firewall
+dropped it — the port or subnet isn't allowed.
 
-In the project's `devcontainer.json`:
+> **Tighter alternative.** If open-on-the-port is too broad, scope to the two pools Compose draws
+> from — but you need **both**, not just `172.17`:
+> ```bash
+> sudo ufw allow from 172.16.0.0/12  to any port 11435 proto tcp
+> sudo ufw allow from 192.168.0.0/16 to any port 11435 proto tcp
+> ```
+
+## Step 3 — Container: render `models.json` on every start
+
+The container home directory is **wiped on rebuild**, so Pi and its `~/.pi/agent/models.json` have
+to be re-established every start by a `postStart` hook — never a one-time manual step.
+
+In this setup one script does it: **`setup_pi.sh`**, shipped into each project's
+`.devcontainer/scripts/` (with a `providers/` folder beside it) by `llm-sync`. On start it renders
+`~/.pi/agent/models.json` from `config/providers/*.json` — one file per backend — rewriting each
+provider's `baseUrl` to the container's bridge address. No provider is special-cased; adding a
+backend is a new JSON file (that's the [architecture](architecture.md) seam).
+
+The provider files declare their own host + default:
+
+```jsonc
+// ollama.agentic.json      _hostEnv: OLLAMA_HOST     _defaultHost: http://172.17.0.1:11434
+// diffusion.json           _hostEnv: DIFFUSION_HOST   _defaultHost: http://172.17.0.1:11435
+```
+
+So the rendered `models.json` inside the container carries **both** backends on the bridge:
+
+```
+diffusion  →  http://172.17.0.1:11435/v1   pixelkaiser/diffusiongemma-26B-…-W4A16
+ollama     →  http://172.17.0.1:11434/v1   qwen3.6:35b, qwen3-coder:30b, gemma4:31b, …
+```
+
+Wire the render into `devcontainer.json` (this box uses `setup_ai_env.sh` → `setup_pi.sh`):
 
 ```json
-"containerEnv": {
-    "OLLAMA_HOST": "http://172.17.0.1:11434"
-}
+"postStartCommand": "bash -lc '.devcontainer/scripts/setup_ai_env.sh'"
 ```
 
-This env var is what both the verification below and the setup script read.
+> **Gotcha:** if `postStart` doesn't run the render, the container comes up with **no**
+> `~/.pi/agent/models.json` and Pi silently sees no models. And if the `providers/` folder wasn't
+> shipped next to `setup_pi.sh`, the renderer logs `No provider JSON files found — Skipping` and
+> writes nothing. Re-run `llm-sync` on the host (it stages from `~/.scripts/providers`, symlinked
+> to the repo by `install.sh`), then re-provision the container.
 
-## Step 4 — Container: install Pi and write its model list on start
+Only **tool-capable** models belong in an agent's list. Reasoning-only models get a 400 when Pi
+tries to tool-call them, so they stay out.
 
-This is the step that is easy to get wrong. The container home directory is **not persisted
-across rebuilds**, so Pi and its `~/.pi/agent/models.json` must be re-established on every start
-by a `postStartCommand` — not a one-time manual step.
+---
 
-In this workstation's setup, one script does it: **`setup_ai_env.sh`** (shipped by scbio-docker
-into `.devcontainer/scripts/`). It installs the AI CLIs (Claude, Codex, opencode, Pi, Antigravity)
-and writes `~/.pi/agent/models.json` from the adjacent **`models.agentic.json`** — the single
-source of truth for the agentic (tool-capable) model list — rewriting the Ollama `baseUrl` to the
-container's `OLLAMA_HOST`.
+## The GPU mutex, from the container's side
 
-Wire it into `devcontainer.json`:
+Both providers are always *listed* in `models.json`. Only the one the host has switched to actually
+answers — the other's port is dead. So picking a model is two moves:
 
-```json
-"postStartCommand": "bash -lc 'chmod +x .devcontainer/scripts/setup_ai_env.sh && .devcontainer/scripts/setup_ai_env.sh'"
+```bash
+# on the HOST — hand the GPU to the backend you want
+gpu-switch diffusion       # stops Ollama, drains VRAM, starts vLLM, waits until it's serving
+# gpu-switch ollama        # …and back
+
+# in the CONTAINER's Pi — pick a model served by whatever is now hot
 ```
 
-> **Gotcha I hit:** if `postStartCommand` only runs the sanity check (or nothing AI-related),
-> the container comes up with `OLLAMA_HOST` set but **no `~/.pi/agent/models.json`** — so Pi has
-> no models and silently fails to see the host Ollama. The env var alone is not enough; something
-> has to write the config each start.
-
-The resulting `~/.pi/agent/models.json` looks like this (baseUrl on the bridge, OpenAI-compat
-shim, Ollama's `developer` role and reasoning-effort disabled):
-
-```json
-{
-  "providers": {
-    "ollama": {
-      "baseUrl": "http://172.17.0.1:11434/v1",
-      "api": "openai-completions",
-      "apiKey": "ollama",
-      "compat": { "supportsDeveloperRole": false, "supportsReasoningEffort": false },
-      "models": [
-        { "id": "batiai/qwen3.6-27b:iq4", "name": "Qwen 3.6 27B Dense (Primary Agent)", "reasoning": false, "contextWindow": 131072 }
-        // ... agentic/tool-capable models only
-      ]
-    }
-  }
-}
-```
-
-Only **tool-capable** models belong here. Reasoning-only models (FuseO1, DeepSeek-R1) are left
-out on purpose — Pi tries to tool-call them and gets a 400. They live in Continue/chat configs,
-not in an agent's model list.
+Pick an Ollama model while the GPU is on diffusion (or vice-versa) and you get a **timeout** — the
+backend simply isn't running. No container restart is needed to switch; the config already lists
+both.
 
 ---
 
 ## Verify from inside the container
 
 ```bash
-# 1. Can the container reach the host Ollama at all?
-curl -s http://172.17.0.1:11434/api/tags | jq '.models[].name'
-#    → list of models  = bridge + firewall + 0.0.0.0 all good
-#    → connection refused / timeout = step 1 or 2 failed
+# 1. Can it reach the hot backend? (200 = bridge + firewall + 0.0.0.0 all good)
+curl -s -m 5 -o /dev/null -w "http=%{http_code}\n" http://172.17.0.1:11435/v1/models   # diffusion
+curl -s http://172.17.0.1:11434/api/tags | jq '.models[].name'                          # ollama
 
-# 2. Did the model list get written?
-cat ~/.pi/agent/models.json | jq '.providers.ollama.baseUrl, (.providers.ollama.models|length)'
+# 2. Did the model list get written, with both providers on the bridge?
+jq -r '.providers | to_entries[] | .key + " → " + .value.baseUrl' ~/.pi/agent/models.json
 
 # 3. Does Pi see them?
-pi   # then inside: /model
+pi        # then inside: /model
 ```
+
+`http=000` + a ~5s wait = timeout (Step 2 firewall, or that backend isn't the hot one). Instant
+*refused* = firewall's open but nothing's listening there — run `gpu-switch` on the host.
 
 ---
 
-## The simpler case: Pi in a plain host shell (no container)
+## The easy case: Pi in a plain host shell (no container)
 
-No bridge, no firewall, no `containerEnv`. Ollama is already on `localhost:11434`, so Pi's
-`models.json` just points at `http://localhost:11434/v1`. The host's hand-maintained
-`~/.pi/agent/models.json` is exactly this. Everything above is only needed to cross the container
-boundary.
+No bridge, no firewall, no `containerEnv`. The servers are already on `localhost`, so the host's
+`~/.pi/agent/models.json` just points at `http://localhost:11434/v1` and `…:11435/v1`. Everything
+above is only what it takes to cross the container boundary.
 
 ---
 
 ## TL;DR
 
-- Container reaches host Ollama at **`172.17.0.1`** (Linux bridge gateway) — needs Ollama on
-  `0.0.0.0` **and** `ufw allow 11434` **and** `OLLAMA_HOST` set in `devcontainer.json`.
-- Container home is ephemeral: a **`postStartCommand`** must reinstall Pi and rewrite
-  `~/.pi/agent/models.json` every start. `OLLAMA_HOST` alone does nothing.
-- The model list comes from one file — `models.agentic.json` (agentic/tool-capable only) — with
-  `baseUrl` rewritten to the container's `OLLAMA_HOST`.
-- Host-shell Pi is the easy case: just point `baseUrl` at `localhost:11434/v1`.
+- Host GPU runs **one** model at a time — `gpu-switch` flips Ollama (`:11434`) ⇄ diffusion
+  (`:11435`). The idle one's port is dead; picking its model from a container = timeout.
+- Container → host uses **`172.17.0.1`**: a host-owned IP that routes from any project's network,
+  so it's the one stable address for all of them.
+- Firewall must allow the port for **all** container subnets, not just `172.17.0.0/16` — Compose
+  projects each get their own subnet. Mirror Ollama's open `11434`/`11435` rule, or allow both
+  `172.16.0.0/12` and `192.168.0.0/16`.
+- Container home is ephemeral: a **`postStart`** render (`setup_pi.sh` + shipped `providers/`)
+  rewrites `~/.pi/agent/models.json` every start, listing every backend on the bridge.
+- Host-shell Pi is trivial: point `baseUrl` at `localhost`.
+</content>
+</invoke>

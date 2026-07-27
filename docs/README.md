@@ -33,7 +33,8 @@ pieces work). If you're here to follow the journey, read top to bottom.
 **Serving to the agent:**
 - [`architecture.md`](architecture.md) — the CLI tools and the provider seam that feeds models to Pi.
 - [`devcontainer-ollama-passthrough.md`](devcontainer-ollama-passthrough.md) — an agent inside a
-  container reaching the host's models over the Docker bridge.
+  container reaching the host GPU's models (Ollama *and* diffusion) over the Docker network: the
+  addressing, the per-project-subnet firewall trap, and the GPU mutex from the container's side.
 - [`diffusiongemma-testing.md`](diffusiongemma-testing.md) — the runbook for the diffusion provider.
 
 **Deeper trail:**
