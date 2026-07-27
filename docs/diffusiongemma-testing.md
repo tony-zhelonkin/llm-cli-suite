@@ -48,16 +48,24 @@ idempotent — safe to re-run after a `git pull`.
 sudo cp systemd/diffusiongemma.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
-# 2. Let the Docker bridge reach the port (same rule Ollama needed on 11434).
+# 2. Let containers reach the port. Mirror the rule Ollama already uses on 11434
+#    (`sudo ufw status numbered | grep 1143` — Ollama's is ALLOW from Anywhere).
 #    Skip if `sudo ufw status` is inactive.
-sudo ufw allow from 172.17.0.0/16 to any port 11435 proto tcp
+sudo ufw allow 11435/tcp comment 'DiffusionGemma vLLM API'
 
 # 3. Put gpu-switch on your PATH (install.sh does this too).
 ln -sf "$PWD/bin/gpu-switch" ~/.local/bin/gpu-switch
 ```
 
 After editing the unit, re-run step 1 only. Works for both host-shell and containerised Pi — on
-Linux the bridge IP `172.17.0.1:11435` is reachable from the host itself.
+Linux the host owns `172.17.0.1`, so `172.17.0.1:11435` is reachable from the host itself.
+
+> [!warning] Don't scope the firewall to `172.17.0.0/16`
+> That's the *default* Docker bridge. A Compose-managed devcontainer gets its **own** network
+> (`192.168.x`, `172.18`–`172.31`, …), so its packets never match a `172.17.0.0/16` rule — they get
+> silently dropped and the agent times out, even though `172.17.0.1` still routes. Mirror Ollama's
+> open `11435/tcp` rule (above), or, to tighten both ports, scope to the two pools Compose draws from:
+> `sudo ufw allow from 172.16.0.0/12 to any port 11435 proto tcp` **and** `from 192.168.0.0/16`.
 
 ## Test loop
 
