@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test deps
+        run: sudo apt-get update && sudo apt-get install -y jq shellcheck
+
+      - name: Run test suite
+        run: bash tests/run.sh
+
+      # The renderer's golden fixture must equal a fresh render. If someone edits
+      # the renderer or a provider file without regenerating the golden, this
+      # fails — so what's on GitHub can never silently drift from tested behaviour.
+      - name: Golden fixture is up to date
+        run: |
+          tmp="$(mktemp -d)"
+          cp config/providers/ollama.agentic.json "$tmp/"
+          ( unset OLLAMA_HOST DIFFUSION_HOST
+            source config/master_setup_pi.sh
+            render_pi_models "$tmp" "$tmp/out.json" )
+          if ! diff -u tests/golden/models.ollama-only.json "$tmp/out.json"; then
+            echo "::error::golden fixture is stale — regenerate with tests/regen-golden.sh and commit"
+            exit 1
+          fi

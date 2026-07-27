@@ -61,6 +61,16 @@ endpoint, anything OpenAI-compatible — is a new JSON file, no code change. See
 
 Create `~/.config/pushover.env` with your keys if you want notifications.
 
+## Tests
+
+```bash
+make test      # offline suite — the renderer, config, install-from-scratch, syntax (what CI runs)
+make verify    # on-box: confirm the running system matches the repo (no local drift)
+```
+
+CI runs `make test` on every push; a golden fixture locks the renderer's output so what's on GitHub
+can't drift from tested behaviour. See [`tests/README.md`](tests/README.md).
+
 ## Docs
 
 **Field notes (the story):**
