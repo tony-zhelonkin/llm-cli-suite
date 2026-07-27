@@ -1,5 +1,6 @@
 # Tiny test harness — sourced by each tests/test_*.sh.
 # No dependencies beyond bash + coreutils. Tracks pass/fail, prints TAP-ish lines.
+# shellcheck shell=bash
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
