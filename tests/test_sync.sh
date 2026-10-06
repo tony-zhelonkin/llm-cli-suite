@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
 # llm-sync against throwaway project trees: LLM_SYNC_ROOTS picks the roots
-# (colon or space separated), missing roots are skipped, and each devcontainer
+# (colon-separated; spaces in paths and a quoted leading ~ survive), missing
+# roots are skipped, and each devcontainer
 # gets setup_pi.sh with providers/ beside it.
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-H="$TMP/home"; mkdir -p "$H/.scripts" "$TMP/ws1/proj-a/.devcontainer" "$TMP/ws2/group/proj-b/.devcontainer"
+H="$TMP/home"; mkdir -p "$H/.scripts" "$TMP/ws1/proj-a/.devcontainer" "$TMP/ws 2/group/proj-b/.devcontainer" \
+                       "$H/my projects/proj-c/.devcontainer"
 ln -s "$REPO/config/master_setup_pi.sh" "$H/.scripts/master_setup_pi.sh"
 ln -s "$REPO/config/providers" "$H/.scripts/providers"
 
 sync() { ( export HOME="$H" LLM_SYNC_ROOTS="$1"; "$REPO/bin/llm-sync" ) 2>&1; }
 
-OUT="$(sync "$TMP/ws1:$TMP/does-not-exist $TMP/ws2")"
+# a literal (quoted) ~ like a user would type inside quotes; a root with a space
+OUT="$(sync "$TMP/ws1:$TMP/does-not-exist:$TMP/ws 2:~/my projects")"
 ok       "llm-sync exits 0 with a missing root in the list" test $? -eq 0
-contains "found both projects across both separators" "$OUT" "to 2 projects"
-ok "setup_pi.sh shipped into ws1 (colon-separated)" test -f "$TMP/ws1/proj-a/.devcontainer/scripts/setup_pi.sh"
-ok "setup_pi.sh shipped into ws2 (space-separated)" test -f "$TMP/ws2/group/proj-b/.devcontainer/scripts/setup_pi.sh"
-ok "providers/ shipped beside it"                  test -f "$TMP/ws2/group/proj-b/.devcontainer/scripts/providers/diffusion.json"
+contains "found all three projects" "$OUT" "to 3 projects"
+ok "setup_pi.sh shipped into ws1"                    test -f "$TMP/ws1/proj-a/.devcontainer/scripts/setup_pi.sh"
+ok "a root with a space in it survives the split"    test -f "$TMP/ws 2/group/proj-b/.devcontainer/scripts/setup_pi.sh"
+ok "a quoted leading ~ expands to HOME"              test -f "$H/my projects/proj-c/.devcontainer/scripts/setup_pi.sh"
+ok "providers/ shipped beside it"                    test -f "$TMP/ws 2/group/proj-b/.devcontainer/scripts/providers/diffusion.json"
 ok "shipped as a real file, not a symlink (Docker can't follow those)" \
    test ! -L "$TMP/ws1/proj-a/.devcontainer/scripts/setup_pi.sh"
 

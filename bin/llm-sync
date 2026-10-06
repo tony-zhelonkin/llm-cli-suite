@@ -8,11 +8,20 @@ MASTER="$HOME/.scripts/master_setup_pi.sh"
 MODELS="$(dirname "$MASTER")/providers"
 
 # Define the root directories where I keep my projects.
-# LLM_SYNC_ROOTS overrides them — colon- or space-separated, e.g. on a Mac:
-#   LLM_SYNC_ROOTS=~/projects:~/work llm-sync
+# LLM_SYNC_ROOTS overrides them — colon-separated like PATH, so a path with
+# spaces survives; a leading ~ is expanded even when it arrives quoted. On a Mac:
+#   LLM_SYNC_ROOTS="~/projects:~/Documents/My Projects" llm-sync
 # Roots that don't exist on this box are skipped silently.
 if [ -n "${LLM_SYNC_ROOTS:-}" ]; then
-    IFS=': ' read -r -a WORKSPACE_ROOTS <<< "$LLM_SYNC_ROOTS"
+    IFS=':' read -r -a RAW_ROOTS <<< "$LLM_SYNC_ROOTS"
+    WORKSPACE_ROOTS=()
+    for R in "${RAW_ROOTS[@]}"; do
+        case "$R" in
+            "~")   R="$HOME" ;;
+            "~/"*) R="$HOME/${R#\~/}" ;;
+        esac
+        WORKSPACE_ROOTS+=("$R")
+    done
 else
     WORKSPACE_ROOTS=(
         "/data1/users/antonz/projects"
