@@ -28,6 +28,10 @@ diffusion vLLM unit stay Linux/NVIDIA-only and refuse cleanly elsewhere.
   systemd unit uses `%h` instead of my home path. `launchd/com.tony.ollama-env.plist` is the Mac
   twin of the Ollama override (keep-alive `30m`, not `-1` — unified memory is shared).
 - `llm-sync` — `LLM_SYNC_ROOTS` overrides the workspace roots.
+- **One-time migration on the workstation:** run `llm-agent-config` after merging. The host's
+  `~/.pi/agent/models.json` was rendered with the bridge (`172.17.0.1`). That still works on the
+  host, but a bare host now resolves to `localhost`, so `make verify` reports drift until it's
+  re-rendered. Devcontainers need nothing — they still render the bridge.
 - Tests — host-resolution + detection cases, both install branches (`LLM_SUITE_OS` + stub
   `launchctl`/`systemctl`), platform probes against fake `sysctl`/`vm_stat`, `llm-sync` end to end,
   and a static lint for Linux-isms in mac-reachable code. CI gains a `macos-latest` job running the
