@@ -47,7 +47,7 @@ plat_mem_mib() {
         # used = total − available. Stricter than `free`'s "used": shm/tmpfs
         # sits in buff/cache there but can't be reclaimed under pressure.
         awk '/^MemTotal:/ {t = $2} /^MemAvailable:/ {a = $2}
-             END { printf "%d %d\n", (t - a) / 1024, t / 1024 }' "${LLM_MEMINFO:-/proc/meminfo}"
+             END { printf "%d %d\n", (t - a) / 1024, t / 1024 }' "${LLM_MEMINFO:-/proc/meminfo}"   # linux-only
     fi
 }
 
