@@ -1,0 +1,52 @@
+#!/bin/bash
+# llm-agent-config — the client half: render the agent's models.json for wherever
+# this shell is (bare Linux host, a Mac, a container). No npm, no Pi install —
+# just the provider roster → ~/.pi/agent/models.json.
+#
+#   llm-agent-config            # detect the environment, write ~/.pi/agent/models.json
+#   llm-agent-config --print    # render to stdout instead
+#   llm-agent-config --env      # show the detected environment and resolved URLs
+#
+# Override detection with LLM_AGENT_ENV=host|devcontainer|docker-desktop, a single
+# backend's host with its own var (OLLAMA_HOST, DIFFUSION_HOST), and the roster
+# with LLM_PROVIDERS_DIR. Devcontainers get the same renderer via llm-sync's
+# setup_pi.sh; this is for everywhere else.
+set -euo pipefail
+
+SELF="${BASH_SOURCE[0]}"
+while [ -L "$SELF" ]; do
+    DIR="$(cd -P "$(dirname "$SELF")" && pwd)"
+    SELF="$(readlink "$SELF")"
+    case "$SELF" in /*) ;; *) SELF="$DIR/$SELF" ;; esac
+done
+ROOT="$(cd -P "$(dirname "$SELF")/.." && pwd)"
+
+# shellcheck source=../config/master_setup_pi.sh
+source "$ROOT/config/master_setup_pi.sh"   # functions only; its source guard returns
+
+PROVIDERS="${LLM_PROVIDERS_DIR:-$ROOT/config/providers}"
+OUT="$HOME/.pi/agent/models.json"
+
+command -v jq >/dev/null 2>&1 || { echo "llm-agent-config: needs jq (apt install jq / brew install jq)" >&2; exit 1; }
+
+LLM_AGENT_ENV="$(detect_agent_env)"
+export LLM_AGENT_ENV
+
+case "${1:-}" in
+    --print) render_pi_models "$PROVIDERS" /dev/stdout ;;
+    --env)
+        echo "environment: $LLM_AGENT_ENV"
+        render_pi_models "$PROVIDERS" /dev/stdout \
+            | jq -r '.providers | to_entries[] | "  \(.key) → \(.value.baseUrl)"'
+        ;;
+    "")
+        mkdir -p "$(dirname "$OUT")"
+        # Render to a temp file first so a jq failure never truncates a working config.
+        tmp="$(mktemp "${TMPDIR:-/tmp}/models.json.XXXXXX")"
+        render_pi_models "$PROVIDERS" "$tmp" || { rm -f "$tmp"; exit 1; }
+        mv "$tmp" "$OUT"
+        echo "✅ $OUT rendered for $LLM_AGENT_ENV:"
+        jq -r '.providers | to_entries[] | "   \(.key) → \(.value.baseUrl)"' "$OUT"
+        ;;
+    *) echo "usage: llm-agent-config [--print|--env]" >&2; exit 2 ;;
+esac
