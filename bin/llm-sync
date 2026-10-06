@@ -7,12 +7,19 @@ MASTER="$HOME/.scripts/master_setup_pi.sh"
 # next to the installer so master_setup_pi.sh can read them inside the container.
 MODELS="$(dirname "$MASTER")/providers"
 
-# Define the root directories where I keep my projects
-WORKSPACE_ROOTS=(
-    "/data1/users/antonz/projects"
-    "/scratch/current/antonz/projects"
-    "/data2/users"
-)
+# Define the root directories where I keep my projects.
+# LLM_SYNC_ROOTS overrides them — colon- or space-separated, e.g. on a Mac:
+#   LLM_SYNC_ROOTS=~/projects:~/work llm-sync
+# Roots that don't exist on this box are skipped silently.
+if [ -n "${LLM_SYNC_ROOTS:-}" ]; then
+    IFS=': ' read -r -a WORKSPACE_ROOTS <<< "$LLM_SYNC_ROOTS"
+else
+    WORKSPACE_ROOTS=(
+        "/data1/users/antonz/projects"
+        "/scratch/current/antonz/projects"
+        "/data2/users"
+    )
+fi
 
 if [ ! -f "$MASTER" ]; then
     echo "⚠️ Error: Master script $MASTER not found."
@@ -25,7 +32,7 @@ echo "🔍 Scanning for Devcontainers in workspaces..."
 # Level 4 allows for /data2/users/antonz/projects/myproject/.devcontainer
 FOUND_DEVCONTAINERS=()
 for ROOT in "${WORKSPACE_ROOTS[@]}"; do
-    if [ -d "$ROOT" ]; then
+    if [ -n "$ROOT" ] && [ -d "$ROOT" ]; then
         # Read the output of find into an array safely
         while IFS= read -r -d $'\0' dir; do
             FOUND_DEVCONTAINERS+=("$dir")
