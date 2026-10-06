@@ -49,6 +49,9 @@ eq  "explicit URL kept as-is"                   "http://10.9.8.7:11434"         
 eq  "https without port stays portless"         "https://llm.example.org"           "$(url https://llm.example.org $D host)"
 eq  "trailing /v1/ trimmed (no /v1/v1)"         "http://localhost:11434"            "$(url http://localhost:11434/v1/ $D host)"
 eq  "IPv6 loopback kept"                        "http://[::1]:11434"                "$(url '[::1]:11434' $D host)"
+eq  "bare IPv6 bracketed, default port"        "http://[::1]:11434"                "$(url '::1' $D host)"
+# an explicit scheme means its own default port (80), as to Ollama's client
+eq  "http:// without port stays portless"       "http://gpubox"                     "$(url http://gpubox $D host)"
 
 # the env flows through the whole render, for every provider, by its own port
 OUT3="$( ( unset OLLAMA_HOST DIFFUSION_HOST; export LLM_AGENT_ENV=host; source "$REPO/config/master_setup_pi.sh" && render_pi_models "$TMP" /dev/stdout ) )"

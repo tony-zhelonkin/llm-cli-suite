@@ -118,7 +118,8 @@ it's where to connect. So:
 | `gpubox` | `http://gpubox:11434` — scheme and default port added |
 | `gpubox:9000` | `http://gpubox:9000` |
 | `http://10.0.0.5:11434/v1/` | `http://10.0.0.5:11434` — trailing `/v1` trimmed, so no `/v1/v1` |
-| `https://llm.example.org` | kept as-is; no port is invented for https |
+| `https://llm.example.org`, `http://gpubox` | kept as-is; with an explicit scheme no port is invented (80/443, as Ollama's own client reads it) |
+| `::1` | `http://[::1]:11434` — a bare IPv6 address gets its brackets |
 
 Then `/v1` is appended. The renderer itself does no detection; it takes `LLM_AGENT_ENV` and treats
 unset as `devcontainer`. That keeps its output deterministic, and it's why the golden fixture in

@@ -41,7 +41,7 @@ detect_agent_env() {
 resolve_provider_url() {
     local raw="$1" def="$2" env="$3"
     local def_hp="${def#*://}"; def_hp="${def_hp%%/*}"
-    local def_port="" target url scheme=http hp path="" h p=""
+    local def_port="" target url scheme=http hp path="" h p="" bare=1
     case "$def_hp" in *:*) def_port="${def_hp##*:}" ;; esac
     case "$env" in
         host)           target=localhost ;;
@@ -51,6 +51,7 @@ resolve_provider_url() {
 
     url="${raw:-$def}"
     url="${url// /}"; url="${url%/}"; url="${url%/v1}"; url="${url%/}"
+    case "$raw" in *://*) bare="" ;; esac
     case "$url" in *://*) scheme="${url%%://*}"; url="${url#*://}" ;; esac
     hp="${url%%/*}"
     [[ "$url" == */* ]] && path="/${url#*/}"
@@ -58,6 +59,7 @@ resolve_provider_url() {
         "::"|"[::]") h="" ;;
         \[*\]:*)   h="${hp%:*}"; p="${hp##*:}" ;;
         \[*\])     h="$hp" ;;
+        *:*:*)     h="[$hp]" ;;   # bare IPv6 (::1) — no port can follow unbracketed
         *:*)       h="${hp%:*}"; p="${hp##*:}" ;;
         *)         h="$hp" ;;
     esac
@@ -65,7 +67,9 @@ resolve_provider_url() {
     # container can reach — swap in this environment's host, keep the port.
     [[ -z "$raw" ]] && h="$target"
     case "$h" in ""|0.0.0.0|"[::]") h="$target" ;; esac
-    [[ -z "$p" && "$scheme" == http ]] && p="$def_port"
+    # Only a schemeless value gets the default's port. An explicit http://host
+    # means port 80, as it does to Ollama's own client (and did here pre-3.5).
+    [[ -z "$p" && -n "$bare" ]] && p="$def_port"
     echo "$scheme://$h${p:+:$p}$path"
 }
 
