@@ -34,10 +34,20 @@ ln -sfn "$BASE_DIR/config/providers" ~/.scripts/providers
 if [ "$OS" = linux ]; then
     # Setup Systemd (user unit). No user bus — e.g. a plain ssh session without
     # lingering — is not fatal: the tools are linked, only the daemon waits.
+    UNIT=sys-ram-watchdog.service
     mkdir -p ~/.config/systemd/user
-    ln -sf "$BASE_DIR/systemd/sys-ram-watchdog.service" ~/.config/systemd/user/sys-ram-watchdog.service
+    ln -sf "$BASE_DIR/systemd/$UNIT" ~/.config/systemd/user/$UNIT
     if systemctl --user daemon-reload 2>/dev/null; then
-        systemctl --user enable --now sys-ram-watchdog.service
+        # Already running → restart, so a re-install picks up new code (the unit
+        # runs the repo's script through the symlink, but the old one is in memory).
+        if systemctl --user is-active --quiet $UNIT; then
+            systemctl --user enable $UNIT 2>/dev/null && systemctl --user restart $UNIT \
+                && echo "   restarted $UNIT (picks up new code)" \
+                || echo "⚠️  couldn't restart $UNIT — try: systemctl --user restart $UNIT"
+        else
+            systemctl --user enable --now $UNIT \
+                || echo "⚠️  couldn't enable $UNIT — try: systemctl --user enable --now $UNIT"
+        fi
     else
         echo "⚠️  skipped: enabling sys-ram-watchdog — no systemd user bus here."
         echo "    Later: systemctl --user enable --now sys-ram-watchdog.service"

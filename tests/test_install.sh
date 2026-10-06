@@ -9,19 +9,39 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 STUB="$TMP/stub"; mkdir -p "$STUB"
 
-# systemctl: always fine. launchctl: remembers what's bootstrapped, so `print`
-# answers like the real one and the idempotent path can be exercised.
+# systemctl: succeeds, and remembers whether the unit is running (is-active).
+# launchctl: remembers what's bootstrapped, so `print` answers like the real one.
+# Knobs, as files in the fake HOME:
+#   .bootstrap_fail N  the next N bootstraps fail (the "5: I/O error" race)
+#   .bootout_lag N     after bootout, `print` still sees the job N more times
+#   .load_fail         `load -w` fails too
 cat > "$STUB/systemctl" <<'SH'
 #!/usr/bin/env bash
 echo "systemctl $*" >> "$HOME/.calls"
+case "$*" in
+  *is-active*) [ -f "$HOME/.active" ] ;;
+  *"enable --now"*|*restart*) touch "$HOME/.active" ;;
+esac
 SH
 cat > "$STUB/launchctl" <<'SH'
 #!/usr/bin/env bash
 echo "launchctl $*" >> "$HOME/.calls"
+n() { cat "$HOME/$1" 2>/dev/null || echo 0; }
 case "$1" in
-  bootstrap) basename "$3" .plist >> "$HOME/.loaded" ;;
-  bootout)   touch "$HOME/.loaded"; grep -vx "${2##*/}" "$HOME/.loaded" > "$HOME/.l2"; mv "$HOME/.l2" "$HOME/.loaded"; exit 0 ;;
-  print)     grep -qx "${2##*/}" "$HOME/.loaded" 2>/dev/null ;;
+  bootstrap)
+    if [ "$(n .bootstrap_fail)" -gt 0 ]; then
+      echo $(( $(n .bootstrap_fail) - 1 )) > "$HOME/.bootstrap_fail"
+      echo "Bootstrap failed: 5: Input/output error" >&2; exit 5
+    fi
+    basename "$3" .plist >> "$HOME/.loaded" ;;
+  bootout)
+    touch "$HOME/.loaded"; grep -vx "${2##*/}" "$HOME/.loaded" > "$HOME/.l2"; mv "$HOME/.l2" "$HOME/.loaded"
+    [ -f "$HOME/.bootout_lag" ] && cp "$HOME/.bootout_lag" "$HOME/.lag"; exit 0 ;;
+  print)
+    if [ "$(n .lag)" -gt 0 ]; then echo $(( $(n .lag) - 1 )) > "$HOME/.lag"; exit 0; fi
+    grep -qx "${2##*/}" "$HOME/.loaded" 2>/dev/null ;;
+  load) [ ! -f "$HOME/.load_fail" ] ;;
+  kickstart) exit 0 ;;
 esac
 SH
 chmod +x "$STUB/systemctl" "$STUB/launchctl"
@@ -60,12 +80,16 @@ eq "linux: providers staging resolves into the repo" \
 
 ok "linux: watchdog unit linked"   test -e "$L/.config/systemd/user/sys-ram-watchdog.service"
 contains "linux: watchdog enabled via systemd --user" "$(cat "$L/.calls")" "systemctl --user enable --now sys-ram-watchdog.service"
+eq       "linux: first install doesn't restart" "0" "$(grep -c 'restart' "$L/.calls")"
 ok "linux: no launchd agent"       test ! -e "$L/Library/LaunchAgents"
 
 # Idempotent: a second run must not error and must leave the same links.
 run_install linux "$L"
 ok "linux: idempotent (second run exits 0)" test $? -eq 0
 ok "linux: gpu-switch still linked after re-run" test -x "$L/.local/bin/gpu-switch"
+# …and the watchdog, already active, is restarted so it runs the new code
+contains "linux: re-install restarts the running watchdog" "$(cat "$L/.calls")" "systemctl --user restart sys-ram-watchdog.service"
+contains "linux: …and says so" "$(cat "$L/.out")" "restarted sys-ram-watchdog.service"
 
 # No user bus (systemctl fails) must not abort the install under set -e.
 NB="$TMP/nobus"; mkdir -p "$NB/stub"
