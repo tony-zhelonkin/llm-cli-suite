@@ -1,22 +1,20 @@
 #!/bin/bash
 # Resource Watchdog Script
-# Monitors RAM/VRAM usage and alerts statefully to avoid spam
+# Monitors RAM/VRAM usage and alerts statefully to avoid spam.
+# VRAM is only watched where nvidia-smi exists; on a Mac the RAM figure already
+# is the GPU's memory (unified). `--once` runs a single pass, for testing.
 
 export PATH="$PATH:$HOME/.local/bin"
+SELF="${BASH_SOURCE[0]}"; while [ -L "$SELF" ]; do D="$(cd -P "$(dirname "$SELF")" && pwd)"; SELF="$(readlink "$SELF")"; case "$SELF" in /*) ;; *) SELF="$D/$SELF" ;; esac; done
+. "$(cd -P "$(dirname "$SELF")/.." && pwd)/lib/platform.sh"
 
 RAM_WARN_LEVEL=0
 VRAM_WARN_LEVEL=0
 
 while true; do
     # Get RAM usage percentage
-    RAM_TOTAL=$(free -m | awk '/^Mem:/{print $2}')
-    RAM_USED=$(free -m | awk '/^Mem:/{print $3}')
+    read -r RAM_USED RAM_TOTAL <<< "$(plat_mem_mib)"
     RAM_PERCENT=$(( 100 * RAM_USED / RAM_TOTAL ))
-
-    # Get VRAM usage percentage
-    VRAM_TOTAL=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits)
-    VRAM_USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits)
-    VRAM_PERCENT=$(( 100 * VRAM_USED / VRAM_TOTAL ))
 
     # RAM Logic (Stateful)
     if [ "$RAM_PERCENT" -ge 99 ] && [ "$RAM_WARN_LEVEL" -lt 99 ]; then
@@ -29,16 +27,21 @@ while true; do
         RAM_WARN_LEVEL=0 # Reset when it cools down
     fi
 
-    # VRAM Logic (Stateful)
-    if [ "$VRAM_PERCENT" -ge 99 ] && [ "$VRAM_WARN_LEVEL" -lt 99 ]; then
-        sys-notify "⚠️ CRITICAL: GPU VRAM at ${VRAM_PERCENT}%" "RTX 5000 VRAM is nearly full."
-        VRAM_WARN_LEVEL=99
-    elif [ "$VRAM_PERCENT" -ge 90 ] && [ "$VRAM_WARN_LEVEL" -lt 90 ]; then
-        sys-notify "⚠️ WARNING: GPU VRAM at ${VRAM_PERCENT}%" "VRAM threshold crossed."
-        VRAM_WARN_LEVEL=90
-    elif [ "$VRAM_PERCENT" -lt 85 ]; then
-        VRAM_WARN_LEVEL=0 # Reset when it cools down
+    # VRAM Logic (Stateful) — only with an NVIDIA card
+    read -r VRAM_USED VRAM_TOTAL <<< "$(plat_vram_mib)"
+    if [ -n "$VRAM_TOTAL" ]; then
+        VRAM_PERCENT=$(( 100 * VRAM_USED / VRAM_TOTAL ))
+        if [ "$VRAM_PERCENT" -ge 99 ] && [ "$VRAM_WARN_LEVEL" -lt 99 ]; then
+            sys-notify "⚠️ CRITICAL: GPU VRAM at ${VRAM_PERCENT}%" "GPU VRAM is nearly full."
+            VRAM_WARN_LEVEL=99
+        elif [ "$VRAM_PERCENT" -ge 90 ] && [ "$VRAM_WARN_LEVEL" -lt 90 ]; then
+            sys-notify "⚠️ WARNING: GPU VRAM at ${VRAM_PERCENT}%" "VRAM threshold crossed."
+            VRAM_WARN_LEVEL=90
+        elif [ "$VRAM_PERCENT" -lt 85 ]; then
+            VRAM_WARN_LEVEL=0 # Reset when it cools down
+        fi
     fi
 
+    [ "${1:-}" = --once ] && { echo "RAM ${RAM_PERCENT}%${VRAM_TOTAL:+ | VRAM ${VRAM_PERCENT}%}"; break; }
     sleep 60
 done

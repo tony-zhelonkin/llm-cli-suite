@@ -16,6 +16,15 @@
 # (via run()) so nothing sudo happens invisibly — you see exactly what executes.
 set -euo pipefail
 
+# Linux/NVIDIA only: systemd units + nvidia-smi. A Mac has one unified memory pool
+# and no second server to hand the GPU to, so there's nothing to switch.
+SELF="${BASH_SOURCE[0]}"; while [ -L "$SELF" ]; do D="$(cd -P "$(dirname "$SELF")" && pwd)"; SELF="$(readlink "$SELF")"; case "$SELF" in /*) ;; *) SELF="$D/$SELF" ;; esac; done
+. "$(cd -P "$(dirname "$SELF")/.." && pwd)/lib/platform.sh"
+if [ "$(plat_os)" != linux ] || [ "$(plat_accel)" != nvidia ]; then
+  echo "gpu-switch: Linux + NVIDIA only (systemd units, nvidia-smi) — nothing to switch on this $(plat_os) box." >&2
+  exit 1
+fi
+
 # Print then execute — makes all privileged actions observable.
 run() { echo "  \$ $*"; "$@"; }
 
@@ -55,7 +64,7 @@ wait_until_free() {
 }
 
 status() {
-  echo "GPU used: $(gpu_used_mib) MiB / 32760"
+  echo "GPU used: $(plat_vram_mib | awk '{print $1 " MiB / " $2}')"
   for u in "$OLLAMA_UNIT" "$DIFFUSION_UNIT"; do
     printf '  %-24s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null | head -1)"
   done
