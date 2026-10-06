@@ -127,10 +127,37 @@ run_install macos "$M"
 ok "macos: idempotent (second run exits 0)" test $? -eq 0
 eq "macos: re-run doesn't bootstrap again" "1" "$(grep -c 'launchctl bootstrap' "$M/.calls")"
 contains "macos: …and says it's already loaded" "$(cat "$M/.out")" "already loaded"
+contains "macos: …and kickstarts it to run the new code" "$(cat "$M/.calls")" "launchctl kickstart -k gui/$(id -u)/com.tony.sys-ram-watchdog"
 
 # A changed plist (e.g. new HOME layout) is re-bootstrapped, not left stale.
 echo "<!-- stale -->" >> "$P"
 run_install macos "$M"
 eq "macos: changed plist → bootout + bootstrap again" "2" "$(grep -c 'launchctl bootstrap' "$M/.calls")"
+
+# bootout is async: launchd still lists the job for a moment. The installer must
+# wait it out before bootstrapping, not race it.
+echo "<!-- stale again -->" >> "$P"; echo 3 > "$M/.bootout_lag"; : > "$M/.calls"
+run_install macos "$M"
+ok "macos: lagging bootout → still exits 0" test $? -eq 0
+after_bootout="$(sed -n '/launchctl bootout/,$p' "$M/.calls")"
+eq "macos: waited — print polled until the job was gone" "4" \
+   "$(printf '%s\n' "$after_bootout" | sed '/launchctl bootstrap/,$d' | grep -c 'launchctl print')"
+eq "macos: …then one clean bootstrap" "1" "$(grep -c 'launchctl bootstrap' "$M/.calls")"
+rm -f "$M/.bootout_lag"
+
+# First bootstrap fails (the "5: Input/output error" race) → retried, loaded.
+F="$TMP/mac-flaky"; mkdir -p "$F"; echo 1 > "$F/.bootstrap_fail"
+run_install macos "$F"
+ok       "macos: first bootstrap fails → install still exits 0" test $? -eq 0
+eq       "macos: …bootstrap retried" "2" "$(grep -c 'launchctl bootstrap' "$F/.calls")"
+contains "macos: …and loaded on the retry" "$(cat "$F/.out")" "loaded com.tony.sys-ram-watchdog"
+
+# launchd refuses outright (bootstrap and load -w) → a warning, never an abort.
+X="$TMP/mac-broken"; mkdir -p "$X"; echo 99 > "$X/.bootstrap_fail"; touch "$X/.load_fail"
+run_install macos "$X"
+ok       "macos: launchd failing is not fatal under set -e" test $? -eq 0
+contains "macos: …warns how to load it by hand" "$(cat "$X/.out")" "couldn't load com.tony.sys-ram-watchdog"
+ok       "macos: …and the tools are still linked" test -x "$X/.local/bin/llm-status"
+contains "macos: …and the installer still finishes" "$(cat "$X/.out")" "Installed!"
 
 finish

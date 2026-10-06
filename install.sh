@@ -63,15 +63,39 @@ else
     DOMAIN="gui/$(id -u)"
     mkdir -p "$AGENTS"
     NEW=$(sed "s|@HOME@|$HOME|g" "$BASE_DIR/launchd/$LABEL.plist")
+    # Every launchctl failure below is a warning, not an abort: the tools are
+    # already linked by now, only the daemon is missing.
     if [ -f "$PLIST" ] && [ "$(cat "$PLIST")" = "$NEW" ] \
         && launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
-        echo "   $LABEL already loaded."
+        # Same plist, already loaded → kick it so it runs the current code.
+        launchctl kickstart -k "$DOMAIN/$LABEL" >/dev/null 2>&1 \
+            && echo "   $LABEL already loaded — restarted (picks up new code)." \
+            || echo "   $LABEL already loaded."
     else
         printf '%s\n' "$NEW" > "$PLIST"
-        launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
-        # bootstrap is the modern verb; load -w for older macOS.
-        launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null || launchctl load -w "$PLIST"
-        echo "   loaded $LABEL ($PLIST)"
+        if launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
+            launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+            # bootout returns before launchd lets go; bootstrapping too early
+            # fails with "5: Input/output error". Wait (≤5s) until it's gone.
+            n=0
+            while launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1 && [ $n -lt 10 ]; do
+                sleep 0.5; n=$((n + 1))
+            done
+        fi
+        # bootstrap is the modern verb (retried — it can still race the
+        # teardown); load -w for older macOS.
+        ok=no
+        for try in 1 2 3; do
+            if launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null; then ok=yes; break; fi
+            if [ $try -lt 3 ]; then sleep 1; fi
+        done
+        [ $ok = yes ] || { launchctl load -w "$PLIST" 2>/dev/null && ok=yes; } || true
+        if [ $ok = yes ]; then
+            echo "   loaded $LABEL ($PLIST)"
+        else
+            echo "⚠️  couldn't load $LABEL — the tools are installed; load it by hand:"
+            echo "    launchctl bootstrap $DOMAIN $PLIST"
+        fi
     fi
     echo "ℹ️  skipped: gpu-switch + the diffusion vLLM unit — Linux/NVIDIA only."
     echo "    Ollama tuning on a Mac: launchd/README.md (com.tony.ollama-env)."
