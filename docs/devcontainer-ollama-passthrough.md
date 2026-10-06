@@ -191,6 +191,18 @@ No bridge, no firewall, no `containerEnv`. The servers are already on `localhost
 `~/.pi/agent/models.json` just points at `http://localhost:11434/v1` and `…:11435/v1`. Everything
 above is only what it takes to cross the container boundary.
 
+`llm-agent-config` writes exactly that. It sees it's not in a container and swaps the bridge for
+`localhost`, keeping each provider's port.
+
+## A Mac with Docker Desktop
+
+There's no `172.17.0.1` from a Docker Desktop container to the Mac; the containers live in Docker's
+own Linux VM. The way out is `host.docker.internal`, which Docker Desktop forwards to the Mac's
+loopback, so Ollama's default `127.0.0.1` bind is enough and there's no firewall step. `setup_pi.sh`
+spots Docker Desktop (and OrbStack) from the VM's kernel name and renders `host.docker.internal`
+by itself. Under Colima or anything else it can't recognise, set `LLM_AGENT_ENV=docker-desktop` in
+`containerEnv`. The rules are in [architecture.md](architecture.md#where-the-host-comes-from).
+
 ---
 
 ## TL;DR
@@ -204,6 +216,7 @@ above is only what it takes to cross the container boundary.
   `172.16.0.0/12` and `192.168.0.0/16`.
 - Container home is ephemeral: a **`postStart`** render (`setup_pi.sh` + shipped `providers/`)
   rewrites `~/.pi/agent/models.json` every start, listing every backend on the bridge.
-- Host-shell Pi is trivial: point `baseUrl` at `localhost`.
+- Host-shell Pi is trivial: `llm-agent-config` points `baseUrl` at `localhost`. A Docker
+  Desktop container on a Mac gets `host.docker.internal` instead of the bridge.
 </content>
 </invoke>

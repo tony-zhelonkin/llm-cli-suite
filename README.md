@@ -46,21 +46,27 @@ Getting it onto a frozen-driver 32GB box was its own adventure; that story is in
 
 ## The tools
 
-| Tool | What it does |
-|---|---|
-| `llm-manage` | Load/flush an Ollama model on the GPU, injecting a strict context window at load time so KV cache can't run away. Single-model residency by design. |
-| `llm-status` | One-screen dashboard: system RAM, VRAM, and which model is hot (`free` + `nvidia-smi` + `ollama ps`). |
-| `gpu-switch` | Hand the single GPU between Ollama and the vLLM diffusion server — stop one, wait for VRAM to actually drain, start the other. They can't co-reside on 32GB. |
-| `llm-sync` | Find `.devcontainer` folders across the workspace and inject the current model config, so a containerised agent talks to the host models. |
-| `sys-ram-watchdog` | Background daemon that alerts at 90% / 99% RAM/VRAM. |
-| `sys-notify` | Push-notification sender (reads `~/.config/pushover.env`). |
+| Tool | Side | What it does |
+|---|---|---|
+| `llm-manage` | server | Load/flush an Ollama model on the GPU, injecting a strict context window at load time so KV cache can't run away. Single-model residency by design. |
+| `llm-status` | server | One-screen dashboard: system RAM, VRAM (or unified memory on a Mac), and which model is hot. |
+| `gpu-switch` | server · **Linux/NVIDIA only** | Hand the single GPU between Ollama and the vLLM diffusion server — stop one, wait for VRAM to actually drain, start the other. They can't co-reside on 32GB. |
+| `sys-ram-watchdog` | server | Background daemon that alerts at 90% / 99% RAM/VRAM (systemd user unit; launchd agent on a Mac). |
+| `sys-notify` | server | Push-notification sender (reads `~/.config/pushover.env`). |
+| `llm-agent-config` | client | Render the agent's `models.json` for wherever this shell is — Linux host, Mac, container. |
+| `llm-sync` | client | Find `.devcontainer` folders across the workspace and inject the current model config, so a containerised agent talks to the host models. |
+
+The diffusion vLLM unit (`systemd/diffusiongemma.service`) is Linux/NVIDIA only too. The server
+half runs on the box with the accelerator, the client half wherever an agent runs; the split is
+drawn in [`docs/architecture.md`](docs/architecture.md).
 
 ## Serving models to a coding agent
 
 Model lists live in `config/providers/*.json` — one file per backend. 
 
 A renderer (`config/master_setup_pi.sh`) merges them into the agent's config and rewrites each backend's host
-per environment (host shell vs. devcontainer bridge). 
+per environment: `localhost` in a host shell, the Docker bridge in a Linux devcontainer,
+`host.docker.internal` in a Docker Desktop container on a Mac. 
 
 Adding a new backend — Ollama, a vLLM endpoint, anything OpenAI-compatible 
 is just a new JSON file, no code change. 
@@ -71,9 +77,28 @@ See [`docs/architecture.md`](docs/architecture.md).
 
 ```bash
 ./install.sh          # symlinks the tools into ~/.local/bin, enables the watchdog
+llm-agent-config      # renders ~/.pi/agent/models.json for this shell
 ```
 
+`install.sh` works out the OS, installs only what's valid there, and tells you what it skipped.
+It's safe to re-run.
+
 Create `~/.config/pushover.env` with your keys if you want notifications.
+
+## On macOS
+
+It runs on a Mac too (Apple Silicon, Ollama.app or `brew install ollama`, stock bash 3.2). Not
+everything comes along:
+
+- **Works:** `llm-manage`, `llm-status`, `sys-ram-watchdog` (as a launchd agent), `sys-notify`,
+  `llm-agent-config`, `llm-sync`.
+- **Doesn't, by design:** `gpu-switch` and the diffusion vLLM server. They manage NVIDIA VRAM and a
+  CUDA build; on a Mac they refuse with one line, and `install.sh` skips them.
+- **Different:** memory is unified, so there's no VRAM line, only the RAM the GPU shares. The budget
+  is whatever's left after macOS and your apps, not a 32GB card. The Ollama tuning goes in through
+  `launchctl` rather than a systemd override; see [`launchd/README.md`](launchd/README.md).
+
+The Mac path is in [`docs/getting-started.md`](docs/getting-started.md#on-a-mac).
 
 ## Getting started
 
@@ -84,7 +109,7 @@ so you can follow in my footsteps.
 ## Make it yours
 
 A few things are specific to my box and you'll want to change them: the workspace roots in
-`bin/llm-sync`, the model aliases in `bin/llm-manage`, the `OLLAMA_MODELS` path in the Ollama
+`bin/llm-sync` (or set `LLM_SYNC_ROOTS`), the model aliases in `bin/llm-manage`, the `OLLAMA_MODELS` path in the Ollama
 override, the model IDs in `config/providers/*.json`, and the `User=`/venv path in the diffusion
 unit. The `+cu129` vLLM pin is tied to my frozen driver — a modern driver can use stock vLLM. The
 full table of what to tweak is at the end of [`docs/getting-started.md`](docs/getting-started.md#make-it-yours).
@@ -111,5 +136,5 @@ can't drift from tested behaviour. See [`tests/README.md`](tests/README.md).
 - [`docs/modelfile-surgery.md`](docs/modelfile-surgery.md) — baking context and samplers per model.
 - [`docs/devcontainer-ollama-passthrough.md`](docs/devcontainer-ollama-passthrough.md) — agent-in-container → host GPU models (Ollama + diffusion): addressing, firewall, GPU mutex.
 - [`docs/diffusiongemma-testing.md`](docs/diffusiongemma-testing.md) — serving a diffusion LLM as a second provider.
-- [`docs/architecture.md`](docs/architecture.md) — the tools and the provider seam.
+- [`docs/architecture.md`](docs/architecture.md) — the server/client split, the tools, the provider seam, and where each environment's host comes from.
 </content>
