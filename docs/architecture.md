@@ -100,12 +100,15 @@ the renderer keeps the default's **port** but swaps the **host**:
 
 | Where the agent runs | Detected by | Host it gets |
 |---|---|---|
-| Linux devcontainer | `/.dockerenv` (or podman's `/run/.containerenv`), stock kernel | `172.17.0.1` — the default, unchanged |
-| Container on Docker Desktop / OrbStack (Mac) | container marker + a `linuxkit` / `orbstack` kernel | `host.docker.internal` |
+| Linux devcontainer | `/.dockerenv` (or `REMOTE_CONTAINERS` set), any other kernel | `172.17.0.1` — the default, unchanged |
+| Docker Desktop (Mac or WSL2) / OrbStack container | `/.dockerenv` (or `REMOTE_CONTAINERS`) + a kernel release containing `linuxkit`, `orbstack`, `microsoft` or `WSL2` | `host.docker.internal` |
+| podman container, rootless or rootful | `/run/.containerenv` (checked first) | `host.containers.internal` |
 | Bare host shell, Linux or Mac | no container marker | `localhost` |
 
-`LLM_AGENT_ENV=devcontainer|docker-desktop|host` forces one. That's needed under Colima and similar
-VMs, which look like a plain Linux container from inside.
+`LLM_AGENT_ENV=devcontainer|docker-desktop|podman|host` forces one. That's needed under Colima and
+similar VMs, which look like a plain Linux container from inside. It's also needed for a plain Docker
+Engine installed *inside* WSL2 (no Docker Desktop). That one has the WSL2 kernel too, so it gets
+detected as Docker Desktop. Set `devcontainer` there if `host.docker.internal` doesn't resolve.
 
 A provider's own env var (`OLLAMA_HOST`, `DIFFUSION_HOST`) still wins over all of that. Its value is
 normalised first, though, because `OLLAMA_HOST` is two things at once. To the Ollama server it's the

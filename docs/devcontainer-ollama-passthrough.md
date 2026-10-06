@@ -199,8 +199,9 @@ above is only what it takes to cross the container boundary.
 There's no `172.17.0.1` from a Docker Desktop container to the Mac; the containers live in Docker's
 own Linux VM. The way out is `host.docker.internal`, which Docker Desktop forwards to the Mac's
 loopback, so Ollama's default `127.0.0.1` bind is enough and there's no firewall step. `setup_pi.sh`
-spots Docker Desktop (and OrbStack) from the VM's kernel name and renders `host.docker.internal`
-by itself. Under Colima or anything else it can't recognise, set `LLM_AGENT_ENV=docker-desktop` in
+spots Docker Desktop (and OrbStack, and Docker Desktop on WSL2) from the VM's kernel name and
+renders `host.docker.internal` by itself. A podman container (it has `/run/.containerenv`) gets
+`host.containers.internal`. Under Colima or anything else it can't recognise, set `LLM_AGENT_ENV=docker-desktop` in
 `containerEnv`. The rules are in [architecture.md](architecture.md#where-the-host-comes-from).
 
 ---

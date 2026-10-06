@@ -7,7 +7,7 @@
 #   llm-agent-config --print    # render to stdout instead
 #   llm-agent-config --env      # show the detected environment and resolved URLs
 #
-# Override detection with LLM_AGENT_ENV=host|devcontainer|docker-desktop, a single
+# Override detection with LLM_AGENT_ENV=host|devcontainer|docker-desktop|podman, a single
 # backend's host with its own var (OLLAMA_HOST, DIFFUSION_HOST), and the roster
 # with LLM_PROVIDERS_DIR. Devcontainers get the same renderer via llm-sync's
 # setup_pi.sh; this is for everywhere else.

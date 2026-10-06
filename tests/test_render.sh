@@ -71,6 +71,12 @@ eq  "/.dockerenv on a stock kernel → devcontainer" "devcontainer" \
     "$(detect "$FAKEROOT" 6.8.0-136-generic)"
 eq  "/.dockerenv on linuxkit → docker-desktop" "docker-desktop" \
     "$(detect "$FAKEROOT" 6.10.14-linuxkit)"
+eq  "/.dockerenv on the WSL2 kernel → docker-desktop" "docker-desktop" \
+    "$(detect "$FAKEROOT" 5.15.153.1-microsoft-standard-WSL2)"
+PODROOT="$TMP/podroot"; mkdir -p "$PODROOT/run"; touch "$PODROOT/run/.containerenv"
+eq  "/run/.containerenv → podman" "podman" "$(detect "$PODROOT" 6.8.0-136-generic)"
+eq  "podman → host.containers.internal" "http://host.containers.internal:11434" "$(url "" $D podman)"
+eq  "0.0.0.0 under podman → host.containers.internal" "http://host.containers.internal:11434" "$(url 0.0.0.0 $D podman)"
 eq  "LLM_AGENT_ENV wins over detection" "host" \
     "$( ( source "$REPO/config/master_setup_pi.sh"; LLM_AGENT_ENV=host LLM_DETECT_ROOT="$FAKEROOT" detect_agent_env ) )"
 

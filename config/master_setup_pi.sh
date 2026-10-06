@@ -13,7 +13,9 @@
 
 # Where is this agent, network-wise, relative to the box serving the models?
 #   devcontainer    Linux docker container  → the docker bridge (_defaultHost as written)
-#   docker-desktop  Docker Desktop/OrbStack → host.docker.internal (no 172.17.0.1 to the Mac)
+#   docker-desktop  Docker Desktop (Mac, WSL2) / OrbStack → host.docker.internal
+#                   (no 172.17.0.1 to the real host from inside their VM)
+#   podman          podman container (rootless or rootful) → host.containers.internal
 #   host            bare shell, Linux or Mac → localhost
 # LLM_AGENT_ENV forces one. Colima and friends look like a Linux devcontainer
 # from inside, so set LLM_AGENT_ENV=docker-desktop there.
@@ -21,12 +23,15 @@
 detect_agent_env() {
     if [[ -n "${LLM_AGENT_ENV:-}" ]]; then echo "$LLM_AGENT_ENV"; return 0; fi
     local root="${LLM_DETECT_ROOT:-}"
-    if [[ -e "$root/.dockerenv" || -e "$root/run/.containerenv" || -n "${REMOTE_CONTAINERS:-}" ]]; then
-        # Docker Desktop and OrbStack run containers in their own Linux VM; the
-        # kernel name gives it away.
+    if [[ -e "$root/run/.containerenv" ]]; then
+        # podman writes this into every container; its host alias works rootless too
+        echo podman
+    elif [[ -e "$root/.dockerenv" || -n "${REMOTE_CONTAINERS:-}" ]]; then
+        # Docker Desktop (Mac: linuxkit, Windows: the WSL2 kernel) and OrbStack
+        # run containers in their own Linux VM; the kernel release gives it away.
         case "${LLM_DETECT_KERNEL:-$(uname -r)}" in
-            *linuxkit*|*orbstack*) echo docker-desktop ;;
-            *)                     echo devcontainer ;;
+            *linuxkit*|*orbstack*|*microsoft*|*WSL2*) echo docker-desktop ;;
+            *)                                         echo devcontainer ;;
         esac
     else
         echo host
@@ -46,6 +51,7 @@ resolve_provider_url() {
     case "$env" in
         host)           target=localhost ;;
         docker-desktop) target=host.docker.internal ;;
+        podman)         target=host.containers.internal ;;
         *)              target="${def_hp%:*}" ;;
     esac
 
