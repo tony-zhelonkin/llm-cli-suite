@@ -6,8 +6,9 @@ On a Mac there's no systemd. These are the launchd user agents that do the same 
 
 The macOS twin of `systemd/sys-ram-watchdog.service`. `install.sh` installs it for you: it fills in
 your `$HOME` (launchd doesn't expand `~`), writes it to `~/Library/LaunchAgents/`, and loads it with
-`launchctl bootstrap gui/$(id -u)` (or `load -w` on older macOS). Re-running the installer leaves an
-unchanged, already-loaded agent alone.
+`launchctl bootstrap gui/$(id -u)` (or `load -w` on older macOS). Re-running the installer kicks an
+unchanged, already-loaded agent (`kickstart -k`) so it runs the current code. A changed plist is
+booted out and bootstrapped again. If launchd won't load it, the installer warns and still finishes.
 
 On a Mac it only watches RAM. That's also the GPU's memory (unified), so there's no separate VRAM
 check.

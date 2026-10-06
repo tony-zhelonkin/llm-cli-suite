@@ -40,6 +40,18 @@ diffusion vLLM unit stay Linux/NVIDIA-only and refuse cleanly elsewhere.
   sits in the stack". That section notes the known drift in scbio-docker's own `models.agentic.json`
   and stale `configure_pi_models.sh` copies; those aren't fixed here. A Mac path in
   `getting-started.md`.
+- Hardening from review: `http://host` keeps port 80 and a bare IPv6 address gets brackets. podman
+  gets `host.containers.internal`, and Docker Desktop on WSL2 is detected. `LLM_SYNC_ROOTS` splits
+  on colons only, so a root with spaces survives, and a quoted `~` is expanded. A re-install
+  restarts a running watchdog (systemd `restart`, launchd `kickstart -k`). launchd `bootout` is
+  waited out before `bootstrap`, which gets retried, and a launchd failure warns instead of
+  aborting the install.
+
+**Known gaps:**
+- No uninstall: removing the `~/.local/bin` links, `~/.scripts` staging, the systemd unit or the
+  LaunchAgent is still by hand.
+- `llm-manage`'s HOT notification truncates `size_vram` to whole GB (integer shell math), so a small
+  model shows `0GB on GPU`.
 
 ### 3.4.0 — 2026-07-26 (DiffusionGemma W4A16 — real 128k agent)
 
