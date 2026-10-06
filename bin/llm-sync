@@ -16,6 +16,7 @@ if [ -n "${LLM_SYNC_ROOTS:-}" ]; then
     IFS=':' read -r -a RAW_ROOTS <<< "$LLM_SYNC_ROOTS"
     WORKSPACE_ROOTS=()
     for R in "${RAW_ROOTS[@]}"; do
+        # shellcheck disable=SC2088  # matching a literal ~ is the point
         case "$R" in
             "~")   R="$HOME" ;;
             "~/"*) R="$HOME/${R#\~/}" ;;
