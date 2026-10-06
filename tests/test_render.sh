@@ -31,6 +31,64 @@ eq  "two providers merged"          "2" "$(jq -r '.providers | keys | length' <<
 eq  "diffusion host from its own env" "http://192.168.1.5:11435/v1" "$(jq -r '.providers.diffusion.baseUrl' <<<"$OUT2")"
 eq  "ollama untouched by 2nd provider" "http://172.17.0.1:11434/v1" "$(jq -r '.providers.ollama.baseUrl' <<<"$OUT2")"
 
+# --- host resolution per environment (the defaults are written for the Linux bridge) ---
+url() { ( source "$REPO/config/master_setup_pi.sh" && resolve_provider_url "$@" ); }
+D=http://172.17.0.1:11434
+eq  "devcontainer keeps the bridge default"     "http://172.17.0.1:11434"           "$(url "" $D devcontainer)"
+eq  "bare host → localhost"                     "http://localhost:11434"            "$(url "" $D host)"
+eq  "Docker Desktop → host.docker.internal"     "http://host.docker.internal:11434" "$(url "" $D docker-desktop)"
+# OLLAMA_HOST=0.0.0.0 is the server's bind address on my box, not somewhere to connect
+eq  "0.0.0.0 on the host → localhost"           "http://localhost:11434"            "$(url 0.0.0.0 $D host)"
+eq  "0.0.0.0 in a devcontainer → bridge"        "http://172.17.0.1:11434"           "$(url 0.0.0.0 $D devcontainer)"
+eq  "0.0.0.0:port in Docker Desktop"            "http://host.docker.internal:11434" "$(url 0.0.0.0:11434 $D docker-desktop)"
+eq  "[::]:port bind-all → localhost"            "http://localhost:11434"            "$(url '[::]:11434' $D host)"
+eq  ":port alone → localhost"                   "http://localhost:11434"            "$(url :11434 $D host)"
+eq  "bare host gets scheme + default port"      "http://gpubox:11434"               "$(url gpubox $D host)"
+eq  "bare host:port gets a scheme"              "http://gpubox:9000"                "$(url gpubox:9000 $D host)"
+eq  "explicit URL kept as-is"                   "http://10.9.8.7:11434"             "$(url http://10.9.8.7:11434 $D docker-desktop)"
+eq  "https without port stays portless"         "https://llm.example.org"           "$(url https://llm.example.org $D host)"
+eq  "trailing /v1/ trimmed (no /v1/v1)"         "http://localhost:11434"            "$(url http://localhost:11434/v1/ $D host)"
+eq  "IPv6 loopback kept"                        "http://[::1]:11434"                "$(url '[::1]:11434' $D host)"
+eq  "bare IPv6 bracketed, default port"        "http://[::1]:11434"                "$(url '::1' $D host)"
+# an explicit scheme means its own default port (80), as to Ollama's client
+eq  "http:// without port stays portless"       "http://gpubox"                     "$(url http://gpubox $D host)"
+
+# the env flows through the whole render, for every provider, by its own port
+OUT3="$( ( unset OLLAMA_HOST DIFFUSION_HOST; export LLM_AGENT_ENV=host; source "$REPO/config/master_setup_pi.sh" && render_pi_models "$TMP" /dev/stdout ) )"
+eq  "host render: ollama on localhost"    "http://localhost:11434/v1" "$(jq -r '.providers.ollama.baseUrl' <<<"$OUT3")"
+eq  "host render: diffusion on localhost" "http://localhost:11435/v1" "$(jq -r '.providers.diffusion.baseUrl' <<<"$OUT3")"
+OUT4="$( ( unset DIFFUSION_HOST; export LLM_AGENT_ENV=host OLLAMA_HOST=0.0.0.0; source "$REPO/config/master_setup_pi.sh" && render_pi_models "$TMP" /dev/stdout ) )"
+eq  "host render: bind-all OLLAMA_HOST normalised" "http://localhost:11434/v1" "$(jq -r '.providers.ollama.baseUrl' <<<"$OUT4")"
+
+# --- environment detection (faked filesystem root + kernel) ---
+# detect ROOT [KERNEL] — detection with a fake / and uname -r
+detect() { ( unset LLM_AGENT_ENV REMOTE_CONTAINERS; export LLM_DETECT_ROOT="$1" LLM_DETECT_KERNEL="${2:-6.8.0-generic}"
+             source "$REPO/config/master_setup_pi.sh"; detect_agent_env ); }
+FAKEROOT="$TMP/root"; mkdir -p "$FAKEROOT"
+eq  "no container markers → host" "host" "$(detect "$FAKEROOT")"
+touch "$FAKEROOT/.dockerenv"
+eq  "/.dockerenv on a stock kernel → devcontainer" "devcontainer" \
+    "$(detect "$FAKEROOT" 6.8.0-136-generic)"
+eq  "/.dockerenv on linuxkit → docker-desktop" "docker-desktop" \
+    "$(detect "$FAKEROOT" 6.10.14-linuxkit)"
+eq  "/.dockerenv on the WSL2 kernel → docker-desktop" "docker-desktop" \
+    "$(detect "$FAKEROOT" 5.15.153.1-microsoft-standard-WSL2)"
+PODROOT="$TMP/podroot"; mkdir -p "$PODROOT/run"; touch "$PODROOT/run/.containerenv"
+eq  "/run/.containerenv → podman" "podman" "$(detect "$PODROOT" 6.8.0-136-generic)"
+eq  "podman → host.containers.internal" "http://host.containers.internal:11434" "$(url "" $D podman)"
+eq  "0.0.0.0 under podman → host.containers.internal" "http://host.containers.internal:11434" "$(url 0.0.0.0 $D podman)"
+eq  "LLM_AGENT_ENV wins over detection" "host" \
+    "$( ( source "$REPO/config/master_setup_pi.sh"; LLM_AGENT_ENV=host LLM_DETECT_ROOT="$FAKEROOT" detect_agent_env ) )"
+
+# --- llm-agent-config: the client entrypoint writes models.json for its env ---
+AH="$TMP/agenthome"; mkdir -p "$AH"
+( unset OLLAMA_HOST DIFFUSION_HOST; HOME="$AH" LLM_AGENT_ENV=host "$REPO/bin/llm-agent-config" ) >/dev/null 2>&1
+ok  "llm-agent-config writes ~/.pi/agent/models.json" test -s "$AH/.pi/agent/models.json"
+eq  "llm-agent-config renders for the host" "http://localhost:11434/v1" \
+    "$(jq -r '.providers.ollama.baseUrl' "$AH/.pi/agent/models.json" 2>/dev/null)"
+eq  "llm-agent-config ships the whole roster" "$(ls "$REPO"/config/providers/*.json | wc -l | tr -d ' ')" \
+    "$(jq -r '.providers | length' "$AH/.pi/agent/models.json" 2>/dev/null)"
+
 # --- output is always valid JSON ---
 ok  "render output is valid JSON" jq -e . "$TMP/out.json"
 

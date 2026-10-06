@@ -3,7 +3,7 @@ Description=System RAM and VRAM Watchdog Notification Service
 After=network.target
 
 [Service]
-ExecStart=/home/antonz@bsdad.uchicago.edu/.local/bin/sys-ram-watchdog
+ExecStart=%h/.local/bin/sys-ram-watchdog
 Restart=always
 RestartSec=10
 

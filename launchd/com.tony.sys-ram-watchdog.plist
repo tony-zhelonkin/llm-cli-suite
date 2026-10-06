@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- macOS twin of systemd/sys-ram-watchdog.service. install.sh fills in @HOME@
+     (launchd doesn't expand ~) and writes it to ~/Library/LaunchAgents/. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tony.sys-ram-watchdog</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>@HOME@/.local/bin/sys-ram-watchdog</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardErrorPath</key>
+    <string>/tmp/com.tony.sys-ram-watchdog.err</string>
+</dict>
+</plist>

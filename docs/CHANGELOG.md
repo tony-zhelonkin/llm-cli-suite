@@ -1,5 +1,58 @@
 # Changelog
 
+### 3.5.0 — 2026-10-05 (macOS + an explicit server/client split)
+
+**The suite runs on a Mac now, and the topology is written down.** The server half (Ollama + its
+tuning, `llm-manage`, `llm-status`, the watchdog, `sys-notify`) runs on whatever box has the
+accelerator. The client half (the provider roster + renderer) runs wherever an agent does. `gpu-switch` and the
+diffusion vLLM unit stay Linux/NVIDIA-only and refuse cleanly elsewhere.
+
+- **Environment-aware hosts.** `detect_agent_env` tells a Linux devcontainer (bridge `172.17.0.1`)
+  from a Docker Desktop/OrbStack container (`host.docker.internal`) and a bare host (`localhost`).
+  `resolve_provider_url` normalises `_hostEnv` values. `OLLAMA_HOST=0.0.0.0` is my server's bind
+  address, so a bind-all host, a bare `host[:port]`, a missing scheme and a trailing `/v1` all become
+  something connectable. Still data-driven: the host is swapped, the port kept, no provider named.
+  The renderer takes `LLM_AGENT_ENV` (unset = devcontainer), so the golden fixture is
+  **unchanged**.
+- `bin/llm-agent-config` — the thin client entrypoint: renders `~/.pi/agent/models.json` for the
+  current shell, no npm. `setup_pi.sh` in containers detects the same way, so existing Linux
+  devcontainers render exactly as before.
+- `lib/platform.sh` — OS, accelerator, RAM/VRAM probes; bash 3.2 / BSD-safe. `llm-status` derives
+  its banners (no more hardcoded 512GB / RTX 5000 Ada), and on a Mac reads `hw.memsize` + `vm_stat`
+  and shows the unified-memory note. `sys-ram-watchdog` only checks VRAM where `nvidia-smi` exists.
+- `llm-manage` — the residency check is `/api/ps` after a blocking load. The old one used
+  `/proc/$PID/VmRSS`, which doesn't exist on a Mac. Its `pgrep` matched the runner's cmdline, which
+  holds a blob path, not the model name. And its `mktemp` template broke on BSD.
+- `install.sh` — OS-aware, `set -euo pipefail`, idempotent, says what it skipped. On a Mac the
+  watchdog is `launchd/com.tony.sys-ram-watchdog.plist`, loaded with `launchctl bootstrap`. The
+  systemd unit uses `%h` instead of my home path. `launchd/com.tony.ollama-env.plist` is the Mac
+  twin of the Ollama override (keep-alive `30m`, not `-1` — unified memory is shared).
+- `llm-sync` — `LLM_SYNC_ROOTS` (colon-separated, like PATH; `~` expanded) overrides the workspace roots.
+- **One-time migration on the workstation:** run `llm-agent-config` after merging. The host's
+  `~/.pi/agent/models.json` was rendered with the bridge (`172.17.0.1`). That still works on the
+  host, but a bare host now resolves to `localhost`, so `make verify` reports drift until it's
+  re-rendered. Devcontainers need nothing — they still render the bridge.
+- Tests — host-resolution + detection cases, both install branches (`LLM_SUITE_OS` + stub
+  `launchctl`/`systemctl`), platform probes against fake `sysctl`/`vm_stat`, `llm-sync` end to end,
+  and a static lint for Linux-isms in mac-reachable code. CI gains a `macos-latest` job running the
+  suite under stock `/bin/bash` 3.2.
+- Docs — server/client diagram and the host-resolution tables in `architecture.md`, plus "Where this
+  sits in the stack". That section notes the known drift in scbio-docker's own `models.agentic.json`
+  and stale `configure_pi_models.sh` copies; those aren't fixed here. A Mac path in
+  `getting-started.md`.
+- Hardening from review: `http://host` keeps port 80 and a bare IPv6 address gets brackets. podman
+  gets `host.containers.internal`, and Docker Desktop on WSL2 is detected. `LLM_SYNC_ROOTS` splits
+  on colons only, so a root with spaces survives, and a quoted `~` is expanded. A re-install
+  restarts a running watchdog (systemd `restart`, launchd `kickstart -k`). launchd `bootout` is
+  waited out before `bootstrap`, which gets retried, and a launchd failure warns instead of
+  aborting the install.
+
+**Known gaps:**
+- No uninstall: removing the `~/.local/bin` links, `~/.scripts` staging, the systemd unit or the
+  LaunchAgent is still by hand.
+- `llm-manage`'s HOT notification truncates `size_vram` to whole GB (integer shell math), so a small
+  model shows `0GB on GPU`.
+
 ### 3.4.0 — 2026-07-26 (DiffusionGemma W4A16 — real 128k agent)
 
 **The quant hunt succeeded: W4A16 int4 serves DiffusionGemma at 128k on the Ada card.** Desk

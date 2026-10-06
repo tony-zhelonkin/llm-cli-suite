@@ -14,7 +14,7 @@ pieces work). If you're here to follow the journey, read top to bottom.
 ## Start here
 
 - [`getting-started.md`](getting-started.md) — the whole path step by step (install/tune Ollama, pull
-  and bake a model, load it, then the diffusion server), plus a **Make it yours** table of everything
+  and bake a model, load it, then the diffusion server), a section **On a Mac**, plus a **Make it yours** table of everything
   that's specific to my machine and what to change.
 
 ## Reference
@@ -31,7 +31,9 @@ pieces work). If you're here to follow the journey, read top to bottom.
   everything runs against, and why it's pinned.
 
 **Serving to the agent:**
-- [`architecture.md`](architecture.md) — the CLI tools and the provider seam that feeds models to Pi.
+- [`architecture.md`](architecture.md) — the server/client split, the CLI tools, and the provider
+  seam that feeds models to Pi (including how each environment — host, devcontainer, Docker Desktop
+  on a Mac — gets its host).
 - [`devcontainer-ollama-passthrough.md`](devcontainer-ollama-passthrough.md) — an agent inside a
   container reaching the host GPU's models (Ollama *and* diffusion) over the Docker network: the
   addressing, the per-project-subnet firewall trap, and the GPU mutex from the container's side.

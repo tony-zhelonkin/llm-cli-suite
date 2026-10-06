@@ -1,19 +1,47 @@
 #!/bin/bash
 # System Dashboard Script
-# Real-time resource and LLM status
+# Real-time resource and LLM status. Sizes and the GPU name are read from the
+# box, not hardcoded — the same screen works on the workstation and on a Mac.
+
+SELF="${BASH_SOURCE[0]}"; while [ -L "$SELF" ]; do D="$(cd -P "$(dirname "$SELF")" && pwd)"; SELF="$(readlink "$SELF")"; case "$SELF" in /*) ;; *) SELF="$D/$SELF" ;; esac; done
+. "$(cd -P "$(dirname "$SELF")/.." && pwd)/lib/platform.sh"
+
+gib() { awk -v m="$1" 'BEGIN { printf "%.0fGB", m / 1024 }'; }
+
+read -r RAM_USED RAM_TOTAL <<< "$(plat_mem_mib)"
+ACCEL=$(plat_accel)
 
 echo "========================================================="
-echo "🖥️  SYSTEM RAM STATUS (512GB Total)"
+echo "🖥️  SYSTEM RAM STATUS ($(gib "$RAM_TOTAL") Total)"
 echo "========================================================="
-free -h | awk 'NR==1 || NR==2'
+if [ "$(plat_os)" = linux ] && command -v free >/dev/null 2>&1; then
+    free -h | awk 'NR==1 || NR==2'   # linux-only
+else
+    echo "Used: $(gib "$RAM_USED") | Free: $(gib $((RAM_TOTAL - RAM_USED))) | Total: $(gib "$RAM_TOTAL")"
+fi
 echo ""
-echo "========================================================="
-echo "🎮 GPU VRAM STATUS (RTX 5000 Ada - 32GB Total)"
-echo "========================================================="
-nvidia-smi --query-gpu=memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader | awk -F', ' '{print "Total: " $1 " | Used: " $2 " | Free: " $3 " | GPU Load: " $4}'
-echo ""
+if [ "$ACCEL" = nvidia ]; then
+    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+    read -r _ VRAM_TOTAL <<< "$(plat_vram_mib)"
+    echo "========================================================="
+    echo "🎮 GPU VRAM STATUS ($GPU_NAME - $(gib "$VRAM_TOTAL") Total)"
+    echo "========================================================="
+    nvidia-smi --query-gpu=memory.total,memory.used,memory.free,utilization.gpu --format=csv,noheader | awk -F', ' '{print "Total: " $1 " | Used: " $2 " | Free: " $3 " | GPU Load: " $4}'
+    echo ""
+elif [ "$ACCEL" = metal ]; then
+    echo "========================================================="
+    echo "🍎 GPU: $(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo 'Apple Silicon') (Metal)"
+    echo "========================================================="
+    echo "Unified memory — models load into the RAM above; there is no separate VRAM."
+    echo "The SIZE / PROCESSOR columns below are what Ollama has resident on the GPU."
+    echo ""
+fi
 echo "========================================================="
 echo "🧠 LOADED OLLAMA MODELS"
 echo "========================================================="
-ollama ps
+if command -v ollama >/dev/null 2>&1; then
+    ollama ps
+else
+    echo "ollama not on PATH"
+fi
 echo "========================================================="

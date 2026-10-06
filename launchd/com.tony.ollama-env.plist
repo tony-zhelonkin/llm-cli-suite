@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- macOS twin of systemd/ollama.override.conf: the global Ollama tuning.
+     `launchctl setenv` doesn't survive a reboot, so this agent re-applies it at
+     login. Ollama.app reads these when it (re)starts. Installed by hand — see
+     launchd/README.md — the same way the Linux override is. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tony.ollama-env</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>launchctl setenv OLLAMA_FLASH_ATTENTION 1; launchctl setenv OLLAMA_KV_CACHE_TYPE q8_0; launchctl setenv OLLAMA_KEEP_ALIVE 30m</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

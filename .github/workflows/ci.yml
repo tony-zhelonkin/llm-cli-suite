@@ -31,3 +31,20 @@ jobs:
             echo "::error::golden fixture is stale — regenerate with tests/regen-golden.sh and commit"
             exit 1
           fi
+
+  # The real macOS check: Apple's stock /bin/bash (3.2) and BSD userland. The
+  # Linux job can only fake the mac branches (LLM_SUITE_OS + stubs); this runs
+  # them on the actual thing. /bin/bash on purpose — the runner's PATH bash is
+  # Homebrew's 5.x, and run.sh re-uses whichever interpreter started it.
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test deps
+        run: brew install jq shellcheck
+
+      - name: Run test suite under stock bash 3.2
+        run: |
+          /bin/bash --version | head -1
+          /bin/bash tests/run.sh

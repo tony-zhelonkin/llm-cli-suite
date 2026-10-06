@@ -1,11 +1,83 @@
 #!/bin/bash
 # Master Setup Script for Pi Agent
 # Managed by llm-sync
+# v3.5.0: Environment-aware hosts — a provider's _defaultHost is written for the
+#         Linux docker bridge; detect_agent_env picks how *this* agent reaches it
+#         (bridge / host.docker.internal / localhost), and resolve_provider_url
+#         normalises env values (0.0.0.0 bind address, bare host:port, no scheme).
 # v3.2.0: Data-driven provider seam — each config/providers/*.json declares its
 #         own _hostEnv/_defaultHost; the renderer rewrites baseUrl generically,
 #         so a non-Ollama backend (HF/vLLM) needs only its own file, no code edit.
 # v3.1.0: Model lists live in config/providers/*.json (one file per provider);
 #         agentic/tool-capable models only; reasoning-only models removed.
+
+# Where is this agent, network-wise, relative to the box serving the models?
+#   devcontainer    Linux docker container  → the docker bridge (_defaultHost as written)
+#   docker-desktop  Docker Desktop (Mac, WSL2) / OrbStack → host.docker.internal
+#                   (no 172.17.0.1 to the real host from inside their VM)
+#   podman          podman container (rootless or rootful) → host.containers.internal
+#   host            bare shell, Linux or Mac → localhost
+# LLM_AGENT_ENV forces one. Colima and friends look like a Linux devcontainer
+# from inside, so set LLM_AGENT_ENV=docker-desktop there.
+# LLM_DETECT_ROOT / LLM_DETECT_KERNEL exist only so tests can fake a container.
+detect_agent_env() {
+    if [[ -n "${LLM_AGENT_ENV:-}" ]]; then echo "$LLM_AGENT_ENV"; return 0; fi
+    local root="${LLM_DETECT_ROOT:-}"
+    if [[ -e "$root/run/.containerenv" ]]; then
+        # podman writes this into every container; its host alias works rootless too
+        echo podman
+    elif [[ -e "$root/.dockerenv" || -n "${REMOTE_CONTAINERS:-}" ]]; then
+        # Docker Desktop (Mac: linuxkit, Windows: the WSL2 kernel) and OrbStack
+        # run containers in their own Linux VM; the kernel release gives it away.
+        case "${LLM_DETECT_KERNEL:-$(uname -r)}" in
+            *linuxkit*|*orbstack*|*microsoft*|*WSL2*) echo docker-desktop ;;
+            *)                                         echo devcontainer ;;
+        esac
+    else
+        echo host
+    fi
+}
+
+# resolve_provider_url VALUE DEFAULT_HOST AGENT_ENV → the base URL (no /v1).
+# VALUE is what the provider's _hostEnv var holds (may be empty). Ollama's own
+# OLLAMA_HOST doubles as a server bind address — on my box it's 0.0.0.0 — so a
+# bind-all host, a bare host:port, or a missing scheme/port are all made into
+# something a client can actually connect to.
+resolve_provider_url() {
+    local raw="$1" def="$2" env="$3"
+    local def_hp="${def#*://}"; def_hp="${def_hp%%/*}"
+    local def_port="" target url scheme=http hp path="" h p="" bare=1
+    case "$def_hp" in *:*) def_port="${def_hp##*:}" ;; esac
+    case "$env" in
+        host)           target=localhost ;;
+        docker-desktop) target=host.docker.internal ;;
+        podman)         target=host.containers.internal ;;
+        *)              target="${def_hp%:*}" ;;
+    esac
+
+    url="${raw:-$def}"
+    url="${url// /}"; url="${url%/}"; url="${url%/v1}"; url="${url%/}"
+    case "$raw" in *://*) bare="" ;; esac
+    case "$url" in *://*) scheme="${url%%://*}"; url="${url#*://}" ;; esac
+    hp="${url%%/*}"
+    [[ "$url" == */* ]] && path="/${url#*/}"
+    case "$hp" in
+        "::"|"[::]") h="" ;;
+        \[*\]:*)   h="${hp%:*}"; p="${hp##*:}" ;;
+        \[*\])     h="$hp" ;;
+        *:*:*)     h="[$hp]" ;;   # bare IPv6 (::1) — no port can follow unbracketed
+        *:*)       h="${hp%:*}"; p="${hp##*:}" ;;
+        *)         h="$hp" ;;
+    esac
+    # No explicit value: the default's host is the bridge, which only a Linux
+    # container can reach — swap in this environment's host, keep the port.
+    [[ -z "$raw" ]] && h="$target"
+    case "$h" in ""|0.0.0.0|"[::]") h="$target" ;; esac
+    # Only a schemeless value gets the default's port. An explicit http://host
+    # means port 80, as it does to Ollama's own client (and did here pre-3.5).
+    [[ -z "$p" && -n "$bare" ]] && p="$def_port"
+    echo "$scheme://$h${p:+:$p}$path"
+}
 
 # Render all per-provider model files into Pi's single models.json document.
 # Keep this function before the source guard so verification can invoke the
@@ -13,7 +85,8 @@
 render_pi_models() {
     local providers_dir="$1"
     local output_file="$2"
-    local provider_file provider_name host_env default_host host
+    local provider_file provider_name host_env default_host value
+    local agent_env="${LLM_AGENT_ENV:-devcontainer}"
     local base_urls='{}'
     local provider_files=("$providers_dir"/*.json)
 
@@ -21,7 +94,9 @@ render_pi_models() {
     # `_hostEnv` (env var that overrides the host) and `_defaultHost`. The
     # host is resolved per environment and `/v1` appended — no provider name
     # is special-cased here, so a new backend (HF/vLLM diffusion, etc.) needs
-    # only its own JSON file, never a renderer edit.
+    # only its own JSON file, never a renderer edit. The environment comes from
+    # LLM_AGENT_ENV (set by the entrypoints via detect_agent_env); unset means
+    # devcontainer, the historical behaviour the golden fixture locks.
     for provider_file in "${provider_files[@]}"; do
         provider_name="$(jq -r '
             .providers | keys_unsorted
@@ -32,11 +107,12 @@ render_pi_models() {
 
         # A provider without _hostEnv keeps its file baseUrl verbatim.
         [[ -n "$provider_name" && -n "$default_host" ]] || continue
-        host="${!host_env:-$default_host}"
+        value=""
+        [[ -n "$host_env" ]] && value="${!host_env:-}"
         base_urls="$(jq -cn \
             --argjson current "$base_urls" \
             --arg provider "$provider_name" \
-            --arg base "${host%/}/v1" \
+            --arg base "$(resolve_provider_url "$value" "$default_host" "$agent_env")/v1" \
             '$current + {($provider): $base}')" || return 1
     done
 
@@ -122,8 +198,11 @@ elif ! command -v jq &> /dev/null; then
     done
     echo "✅ Pi provider model lists written (verbatim)."
 else
-    # Container reaches host providers over their configured bridge addresses.
-    BRIDGE="${OLLAMA_HOST:-http://172.17.0.1:11434}"
+    # Usually a Linux devcontainer → bridge addresses; Docker Desktop on a Mac
+    # or a bare host get their own (see detect_agent_env).
+    LLM_AGENT_ENV="$(detect_agent_env)"
+    export LLM_AGENT_ENV
     render_pi_models "$PROVIDERS_DIR" ~/.pi/agent/models.json
-    echo "✅ Pi Agent configured per provider (agentic-only) → Ollama @ ${BRIDGE}"
+    echo "✅ Pi Agent configured per provider (agentic-only, env: $LLM_AGENT_ENV):"
+    jq -r '.providers | to_entries[] | "   \(.key) → \(.value.baseUrl)"' ~/.pi/agent/models.json
 fi

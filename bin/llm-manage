@@ -47,32 +47,23 @@ function load_model() {
     echo "🚀 Loading $m_target (Context: $c_target)..."
     sys-notify "Workstation: LLM Mapping" "Initiating mapping for $m_target (Ctx: $c_target)."
     
-    # Trigger API load
-    curl -s http://localhost:11434/api/generate -d "{\"model\": \"$m_target\", \"keep_alive\": -1, \"options\": {\"num_ctx\": $c_target}}" > /dev/null &
-    
-    # Watcher Logic
-    local WATCHER_FILE=$(mktemp /tmp/llm_watcher_XXXXXX.sh)
-    echo '#!/bin/bash' > "$WATCHER_FILE"
-    echo "MODEL_W=$m_target" >> "$WATCHER_FILE"
-    echo "CTX_W=$c_target" >> "$WATCHER_FILE"
-    echo "while true; do" >> "$WATCHER_FILE"
-    echo '  PID=$(pgrep -f "ollama runner.*$MODEL_W" | head -n 1)' >> "$WATCHER_FILE"
-    echo '  [ -n "$PID" ] && break' >> "$WATCHER_FILE"
-    echo '  sleep 5' >> "$WATCHER_FILE"
-    echo "done" >> "$WATCHER_FILE"
-    echo "THRESHOLD=15000000" >> "$WATCHER_FILE"
-    echo "while true; do" >> "$WATCHER_FILE"
-    echo '  [ ! -d "/proc/$PID" ] && break' >> "$WATCHER_FILE"
-    echo '  RSS=$(grep VmRSS /proc/$PID/status | awk "{print \$2}")' >> "$WATCHER_FILE"
-    echo '  if [ "$RSS" -ge "$THRESHOLD" ]; then' >> "$WATCHER_FILE"
-    echo '    sys-notify "Workstation: LLM HOT" "🚀 $MODEL_W (Ctx: $CTX_W) is ready."' >> "$WATCHER_FILE"
-    echo "    break" >> "$WATCHER_FILE"
-    echo "  fi" >> "$WATCHER_FILE"
-    echo "  sleep 15" >> "$WATCHER_FILE"
-    echo "done" >> "$WATCHER_FILE"
-    echo 'rm "$0"' >> "$WATCHER_FILE"
-    
-    bash "$WATCHER_FILE" & disown
+    # Load + confirm in the background. A prompt-less /api/generate only returns
+    # once the weights are loaded, then /api/ps must list the model before it's
+    # called hot; its size_vram goes in the message, so a CPU spill shows as a
+    # low GB figure. Same on Linux and macOS — no /proc, no
+    # guessing at the runner's command line.
+    (
+        curl -s http://localhost:11434/api/generate -d "{\"model\": \"$m_target\", \"keep_alive\": -1, \"options\": {\"num_ctx\": $c_target}}" > /dev/null || exit 0
+        PS=$(curl -s http://localhost:11434/api/ps)
+        case "$PS" in
+            *"\"name\":\"$m_target"*)
+                # size_vram is the first one after this model's name
+                VRAM=${PS#*"\"name\":\"$m_target"}; VRAM=${VRAM#*\"size_vram\":}; VRAM=${VRAM%%[!0-9]*}
+                sys-notify "Workstation: LLM HOT" "🚀 $m_target (Ctx: $c_target) is ready ($(( ${VRAM:-0} / 1073741824 ))GB on GPU)."
+                ;;
+        esac
+    ) > /dev/null 2>&1 &
+    disown
 }
 
 # 4. Main Router

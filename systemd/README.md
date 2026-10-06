@@ -1,6 +1,7 @@
 # systemd — Ollama service tuning + watchdog unit
 
-Version-controlled copies of the systemd files this workstation relies on.
+Version-controlled copies of the systemd files this workstation relies on. Linux only — the
+macOS equivalents are in [`../launchd/`](../launchd/README.md).
 
 ## `ollama.override.conf`
 
@@ -33,4 +34,5 @@ Security note on the `0.0.0.0` bind: [`../docs/SECURITY.md`](../docs/SECURITY.md
 ## `sys-ram-watchdog.service`
 
 Runs `sys-ram-watchdog` as a background daemon (stateful RAM/VRAM alerting, hysteresis
-90% / 99% / reset 85%). Installed by `install.sh`.
+90% / 99% / reset 85%). Installed by `install.sh`. `ExecStart` uses `%h` (your home), so the
+unit isn't tied to my username.
