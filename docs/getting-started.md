@@ -149,7 +149,7 @@ launchctl setenv OLLAMA_KEEP_ALIVE 30m
 
 `launchctl setenv` is forgotten at reboot, so to keep it, install the agent that re-applies it at
 login — `launchd/com.tony.ollama-env.plist`, steps in [`launchd/README.md`](../launchd/README.md).
-That's also where the brew-service variant is (its env lives in its own plist).
+That's also where the brew-service variant is.
 
 Keep-alive is `30m`, not the workstation's `-1`. On a Mac the model shares memory with everything
 else, and pinning 20GB forever starves the desktop.

@@ -46,10 +46,13 @@ Not set, on purpose:
 - `OLLAMA_MODELS` — the default `~/.ollama/models` is fine unless you keep models on an external
   disk. If you do, add `launchctl setenv OLLAMA_MODELS /Volumes/…;` to the string.
 
-If you run the Homebrew service (`brew services start ollama`) instead of the app, these launchd
-vars don't reach it. The brew service gets its env from its own plist,
-`~/Library/LaunchAgents/homebrew.mxcl.ollama.plist`, under `EnvironmentVariables`. Edit that one,
-then `brew services restart ollama`. A `brew upgrade` can rewrite it, so check after upgrading.
+If you run the Homebrew service (`brew services start ollama`) instead of the app, `launchctl
+setenv` reaches it too, since launchd hands the vars to every job it starts afterwards. The catch is
+login: both agents start at once, so the brew one can come up before the vars are set (Ollama.app
+as a login item can race it the same way). After login,
+`brew services restart ollama` makes it pick them up. Don't edit
+`~/Library/LaunchAgents/homebrew.mxcl.ollama.plist` by hand. `brew services start`/`restart`
+regenerate it from the formula and throw the edit away.
 
 ## Not here
 
