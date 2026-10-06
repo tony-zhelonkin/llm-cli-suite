@@ -49,7 +49,7 @@ for the OS, and says what it skipped).
 
 - **`llm-manage`** — load or flush one Ollama model. It injects a strict context window at load
   time so KV cache can't grow past the memory budget. It reports the model hot only when `/api/ps`
-  lists it with bytes on the GPU, not when Ollama merely accepts the load. Single-model residency by
+  lists it, not when Ollama merely accepts the load, and says how many GB landed on the GPU. Single-model residency by
   design.
 - **`llm-status`** — one screen: system RAM, VRAM (`nvidia-smi`) or the unified-memory note on a
   Mac, and which model is hot (`ollama ps`). Totals and the GPU name are read from the box. The
@@ -156,8 +156,8 @@ go and `llm-sync` to be the only way the list gets into a project.
   The same goes for a new *place* to run an agent: a row in the host table, not a new provider.
 - **Server and client are separate.** The server is one per box and needs root; clients are
   everywhere and need nothing but `jq`. Only the client half travels into containers.
-- **Measured, not guessed.** "Loaded" means Ollama's own `/api/ps` lists the model with bytes on the
-  GPU — not that the load request was accepted.
+- **Measured, not guessed.** "Loaded" means Ollama's own `/api/ps` lists the model, with how much
+  of it is on the GPU — not that the load request was accepted.
 - **Hysteresis in monitoring.** Warm and cool thresholds (90% / 85%) stop the watchdog flapping.
 - **Portable on purpose.** Everything a Mac can reach runs on its stock bash 3.2 and BSD tools; CI
   runs the suite there.

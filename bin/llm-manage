@@ -48,8 +48,9 @@ function load_model() {
     sys-notify "Workstation: LLM Mapping" "Initiating mapping for $m_target (Ctx: $c_target)."
     
     # Load + confirm in the background. A prompt-less /api/generate only returns
-    # once the weights are loaded, then /api/ps must list the model with bytes
-    # in (V)RAM before it's called hot. Same on Linux and macOS — no /proc, no
+    # once the weights are loaded, then /api/ps must list the model before it's
+    # called hot; its size_vram goes in the message, so a CPU spill shows as a
+    # low GB figure. Same on Linux and macOS — no /proc, no
     # guessing at the runner's command line.
     (
         curl -s http://localhost:11434/api/generate -d "{\"model\": \"$m_target\", \"keep_alive\": -1, \"options\": {\"num_ctx\": $c_target}}" > /dev/null || exit 0
